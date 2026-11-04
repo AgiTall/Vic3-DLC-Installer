@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -38,9 +38,11 @@ namespace Vic3Admin
         string iniPath;
         TextBox tTitle, tSub, tInfo, tFooter, tBg, tPayload, tOut;
         Button bAccent, bBuild;
-        Color accent = Color.FromArgb(122, 31, 37);
-        Color titleColor = Color.FromArgb(90, 26, 30);
-        Button bTitleColor;
+        Color accent = Color.FromArgb(142, 36, 44);
+        Color titleColor = Color.FromArgb(230, 210, 181);
+        Button bTitleColor, bBlurColor;
+        Color blurColor = Color.FromArgb(27, 30, 36);
+        TrackBar nPanel, nTitleW, nTextW;
         PictureBox preview;
         Bitmap canvas;
         ListView list;
@@ -53,8 +55,8 @@ namespace Vic3Admin
         {
             iniPath = Path.Combine(baseDir, "admin.ini");
             Text = "Vic3 Installer — Админ-панель";
-            ClientSize = new Size(940, 770);
-            MinimumSize = new Size(960, 810);
+            ClientSize = new Size(940, 900);
+            MinimumSize = new Size(960, 940);
             StartPosition = FormStartPosition.CenterScreen;
             BackColor = Bg;
             ForeColor = Fg;
@@ -75,19 +77,34 @@ namespace Vic3Admin
             tInfo = Row("Информация", x, ref y, w, 78);
             tFooter = Row("Подпись внизу", x, ref y, w, 40);
 
-            Label la = Cap("Цвета", x, y);
-            bAccent = Btn("Акцент (кнопки)", x + 120, y - 3, 140, 26, false);
-            bTitleColor = Btn("Цвет заголовка", x + 266, y - 3, 140, 26, false);
-            bTitleColor.Click += delegate { using (ColorDialog d = new ColorDialog()) { d.Color = titleColor; d.FullOpen = true; if (d.ShowDialog(this) == DialogResult.OK) { titleColor = d.Color; bTitleColor.BackColor = titleColor; preview.Invalidate(); } } };
+            Section("ЦВЕТА И РАЗМЕРЫ", x, y); y += 22;
+            TableLayoutPanel tl = new TableLayoutPanel();
+            tl.SetBounds(x, y, w, 6 * 36);
+            tl.ColumnCount = 3; tl.RowCount = 6;
+            tl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
+            tl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            tl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 52));
+            for (int i = 0; i < 6; i++) tl.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+            Controls.Add(tl);
+            bAccent = TBtn(tl, 0, "Цвет кнопок (акцент)");
+            bTitleColor = TBtn(tl, 1, "Цвет заголовка");
+            bBlurColor = TBtn(tl, 2, "Цвет размытия");
             bAccent.Click += delegate { PickColor(); };
-            y += 32;
-
+            bTitleColor.Click += delegate { using (ColorDialog d = new ColorDialog()) { d.Color = titleColor; d.FullOpen = true; if (d.ShowDialog(this) == DialogResult.OK) { titleColor = d.Color; bTitleColor.BackColor = titleColor; bTitleColor.ForeColor = Look.IsDark(titleColor) ? Color.White : Color.Black; preview.Invalidate(); } } };
+            bBlurColor.Click += delegate { using (ColorDialog d = new ColorDialog()) { d.Color = blurColor; d.FullOpen = true; if (d.ShowDialog(this) == DialogResult.OK) { blurColor = d.Color; bBlurColor.BackColor = blurColor; bBlurColor.ForeColor = Look.IsDark(blurColor) ? Color.White : Color.Black; LoadBg(); } } };
+            nPanel = TSlider(tl, 3, "Ширина размытия, %", 15, 100, 46, "%");
+            nTitleW = TSlider(tl, 4, "Длина заголовка, px", 180, 600, 264, "");
+            nTextW = TSlider(tl, 5, "Длина текста, px", 180, 600, 264, "");
+            nPanel.ValueChanged += delegate { LoadBg(); };
+            nTitleW.ValueChanged += delegate { preview.Invalidate(); };
+            nTextW.ValueChanged += delegate { preview.Invalidate(); };
+            y += 6 * 36 + 8;
             tBg = Row("Фон (картинка)", x, ref y, w - 90, 0);
             Button bBg = Btn("Обзор…", x + w - 82, y - 27, 82, 26, false);
             bBg.Click += delegate { PickBg(); };
 
             preview = new PictureBox();
-            preview.SetBounds(x, y + 4, 360, 270);
+            preview.SetBounds(x, y + 4, 320, 240);
             preview.BackColor = Color.Black;
             preview.Paint += PreviewPaint;
             Controls.Add(preview);
@@ -192,6 +209,42 @@ namespace Vic3Admin
             return t;
         }
 
+        Button TBtn(TableLayoutPanel tl, int row, string text)
+        {
+            Label l = new Label();
+            l.Text = text; l.ForeColor = Dim; l.Dock = DockStyle.Fill; l.TextAlign = ContentAlignment.MiddleLeft;
+            tl.Controls.Add(l, 0, row);
+            Button b = new Button();
+            b.Text = "Выбрать цвет…";
+            b.FlatStyle = FlatStyle.Flat; b.FlatAppearance.BorderSize = 1;
+            b.FlatAppearance.BorderColor = Color.FromArgb(90, 96, 110);
+            b.BackColor = Field; b.ForeColor = Color.White; b.Cursor = Cursors.Hand;
+            b.Dock = DockStyle.Fill; b.Margin = new Padding(3, 3, 3, 3);
+            tl.Controls.Add(b, 1, row);
+            tl.SetColumnSpan(b, 2);
+            lockables.Add(b);
+            return b;
+        }
+
+        TrackBar TSlider(TableLayoutPanel tl, int row, string text, int min, int max, int val, string unit)
+        {
+            Label l = new Label();
+            l.Text = text; l.ForeColor = Dim; l.Dock = DockStyle.Fill; l.TextAlign = ContentAlignment.MiddleLeft;
+            tl.Controls.Add(l, 0, row);
+            TrackBar t = new TrackBar();
+            t.Minimum = min; t.Maximum = max; t.Value = val;
+            t.TickStyle = TickStyle.None;
+            t.SmallChange = 1; t.LargeChange = (max - min) / 10;
+            t.Dock = DockStyle.Fill; t.Margin = new Padding(3, 4, 3, 0);
+            tl.Controls.Add(t, 1, row);
+            Label v = new Label();
+            v.ForeColor = Fg; v.Dock = DockStyle.Fill; v.TextAlign = ContentAlignment.MiddleRight;
+            v.Text = val + unit;
+            tl.Controls.Add(v, 2, row);
+            t.ValueChanged += delegate { v.Text = t.Value + unit; };
+            lockables.Add(t);
+            return t;
+        }
         Button Btn(string text, int x, int y, int w, int h, bool primary)
         {
             Button b = new Button();
@@ -227,10 +280,31 @@ namespace Vic3Admin
             tBg.Text = Get(d, "bg", Path.Combine(baseDir, "assets\\background.jpg"));
             tPayload.Text = Get(d, "payload", defPayload);
             tOut.Text = Get(d, "out", Path.Combine(baseDir, "Output\\Vic3_DLC_Installer.exe"));
-            accent = Look.ParseColor(Get(d, "accent", "#7A1F25"), accent);
-            titleColor = Look.ParseColor(Get(d, "titlecolor", "#5A1A1E"), titleColor);
+            accent = Look.ParseColor(Get(d, "accent", "#8E242C"), accent);
+            titleColor = Look.ParseColor(Get(d, "titlecolor", "#E6D2B5"), titleColor);
             bTitleColor.BackColor = titleColor;
+            bTitleColor.ForeColor = Look.IsDark(titleColor) ? Color.White : Color.Black;
             bAccent.BackColor = accent;
+            bAccent.ForeColor = Look.IsDark(accent) ? Color.White : Color.Black;
+            blurColor = Look.ParseColor(Get(d, "blurcolor", "#1B1E24"), blurColor);
+            bBlurColor.BackColor = blurColor;
+            bBlurColor.ForeColor = Look.IsDark(blurColor) ? Color.White : Color.Black;
+            nPanel.Value = (int)Clamp(Get(d, "panel", "46"), 15, 100, 46);
+            nTitleW.Value = (int)Clamp(Get(d, "titlew", "264"), 180, 600, 264);
+            nTextW.Value = (int)Clamp(Get(d, "textw", "264"), 180, 600, 264);
+        }
+
+        static decimal Clamp(string s, int min, int max, int def)
+        {
+            decimal v;
+            if (!decimal.TryParse(s, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out v)) return def;
+            return Math.Max(min, Math.Min(max, v));
+        }
+
+        string CfgExtra()
+        {
+            return "blurcolor=" + ColorTranslator.ToHtml(blurColor) + "\npanel=" + nPanel.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+                   "\ntitlew=" + nTitleW.Value + "\ntextw=" + nTextW.Value + "\n";
         }
 
         static string Get(Dictionary<string, string> d, string k, string def)
@@ -253,6 +327,7 @@ namespace Vic3Admin
                 sb.AppendLine("out=" + tOut.Text);
                 sb.AppendLine("accent=" + ColorTranslator.ToHtml(accent));
                 sb.AppendLine("titlecolor=" + ColorTranslator.ToHtml(titleColor));
+                sb.Append(CfgExtra().Replace("\n", Environment.NewLine));
                 File.WriteAllText(iniPath, sb.ToString(), Encoding.UTF8);
             }
             catch { }
@@ -270,7 +345,7 @@ namespace Vic3Admin
                     using (Image tmp = Image.FromStream(new MemoryStream(data))) img = new Bitmap(tmp);
                 }
                 if (canvas != null) canvas.Dispose();
-                canvas = Look.Compose(img);
+                canvas = Look.Compose(img, (float)nPanel.Value, blurColor);
                 if (img != null) img.Dispose();
             }
             catch { }
@@ -282,44 +357,101 @@ namespace Vic3Admin
             Graphics g = e.Graphics;
             if (canvas == null) return;
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
             g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
             g.DrawImage(canvas, 0, 0, preview.Width, preview.Height);
             float k = preview.Width / (float)Look.W;
-            RectangleF t = new RectangleF(24 * k, 44 * k, 250 * k, 80 * k);
-            StringFormat bottom = new StringFormat(); bottom.LineAlignment = StringAlignment.Far;
-            float size = 22f;
+            bool isDark = Look.IsDark(blurColor);
+            Color bodyColor = isDark ? Color.FromArgb(218, 210, 198) : Color.FromArgb(52, 36, 28);
+            Color subColor = isDark ? Color.FromArgb(204, 166, 108) : accent;
+            Color capColor = isDark ? Color.FromArgb(168, 152, 130) : Color.FromArgb(105, 80, 66);
+            Color footColor = isDark ? Color.FromArgb(182, 168, 148) : Color.FromArgb(88, 68, 56);
+
+            float wTitle = Math.Max(200f, (float)nTitleW.Value);
+            float wTxt = Math.Max(200f, (float)nTextW.Value);
+            float wCtrl = Math.Min(wTxt, 272f);
+
+            RectangleF t = new RectangleF(24 * k, 28 * k, wTitle * k, 74 * k);
+            StringFormat top = new StringFormat(); top.LineAlignment = StringAlignment.Near;
+            float size = 20f;
             using (Font f = FitFont(g, tTitle.Text, t, ref size, k))
-                using (SolidBrush tb = new SolidBrush(titleColor)) g.DrawString(tTitle.Text, f, tb, t, bottom);
-            using (Font f = new Font("Segoe UI Semibold", 10.5f * k * 0.75f * 1.33f))
-            using (SolidBrush b = new SolidBrush(accent))
-                g.DrawString(tSub.Text, f, b, new RectangleF(24 * k, 128 * k, 250 * k, 22 * k));
-            using (Font f = new Font("Segoe UI", 8.75f * k * 0.75f * 1.33f))
-            using (SolidBrush b = new SolidBrush(Color.FromArgb(62, 42, 34)))
-                g.DrawString(tInfo.Text, f, b, new RectangleF(24 * k, 156 * k, 250 * k, 112 * k));
-            using (SolidBrush b = new SolidBrush(accent))
-            using (GraphicsPath p = Rounded(new RectangleF(24 * k, 392 * k, 250 * k, 42 * k), 8 * k))
-                g.FillPath(b, p);
-            using (Font f = new Font("Segoe UI Semibold", 10.5f * k * 0.75f * 1.33f))
+            using (SolidBrush tb = new SolidBrush(titleColor))
+                g.DrawString(tTitle.Text, f, tb, t, top);
+
+            using (Font f = new Font("Georgia", 10.25f * k, FontStyle.Bold))
+            using (SolidBrush b = new SolidBrush(subColor))
+                g.DrawString(tSub.Text, f, b, new RectangleF(24 * k, 106 * k, wTxt * k, 22 * k));
+
+            using (Font f = new Font("Segoe UI", 8.75f * k))
+            using (SolidBrush b = new SolidBrush(bodyColor))
+                g.DrawString(tInfo.Text, f, b, new RectangleF(24 * k, 134 * k, wTxt * k, 136 * k));
+
+            using (Font f = new Font("Segoe UI Semibold", 8.25f * k))
+            using (SolidBrush b = new SolidBrush(capColor))
+                g.DrawString("Папка Victoria 3", f, b, new RectangleF(24 * k, 274 * k, wCtrl * k, 18 * k));
+
+            // Поле ввода и кнопка "Обзор"
+            RectangleF rBox = new RectangleF(24 * k, 294 * k, (wCtrl - 74f) * k, 28 * k);
+            RectangleF rBrw = new RectangleF((24 + wCtrl - 68f) * k, 294 * k, 68 * k, 28 * k);
+            Color boxFill = isDark ? Color.FromArgb(230, 32, 36, 44) : Color.FromArgb(235, 244, 238, 228);
+            Color boxBorder = isDark ? Color.FromArgb(145, 148, 122, 80) : Color.FromArgb(150, 140, 118, 92);
+            using (GraphicsPath p = Rounded(rBox, 5 * k))
+            {
+                using (SolidBrush b = new SolidBrush(boxFill)) g.FillPath(b, p);
+                using (Pen pen = new Pen(boxBorder, 1f)) g.DrawPath(pen, p);
+            }
+            using (GraphicsPath p = Rounded(rBrw, 5 * k))
+            {
+                using (SolidBrush b = new SolidBrush(Color.FromArgb(185, 42, 46, 56))) g.FillPath(b, p);
+                using (Pen pen = new Pen(boxBorder, 1f)) g.DrawPath(pen, p);
+            }
+            using (Font f = new Font("Segoe UI Semibold", 8.5f * k))
+            using (SolidBrush b = new SolidBrush(Color.FromArgb(228, 220, 206)))
             {
                 StringFormat c = new StringFormat(); c.Alignment = StringAlignment.Center; c.LineAlignment = StringAlignment.Center;
-                g.DrawString("Установить", f, Brushes.White, new RectangleF(24 * k, 392 * k, 250 * k, 42 * k), c);
+                g.DrawString("Обзор", f, b, rBrw, c);
             }
-            using (Font f = new Font("Segoe UI", 7.5f * k * 0.75f * 1.33f))
-            using (SolidBrush b = new SolidBrush(Color.FromArgb(120, 98, 84)))
-                g.DrawString(tFooter.Text, f, b, new RectangleF(24 * k, 444 * k, 250 * k, 30 * k));
+
+            // Главная кнопка "Установить"
+            RectangleF rInst = new RectangleF(24 * k, 386 * k, wCtrl * k, 40 * k);
+            using (GraphicsPath p = Rounded(rInst, 5 * k))
+            {
+                using (SolidBrush b = new SolidBrush(accent)) g.FillPath(b, p);
+                using (Pen pen = new Pen(Color.FromArgb(180, 195, 158, 100), 1f)) g.DrawPath(pen, p);
+            }
+            using (Font f = new Font("Segoe UI Semibold", 10f * k))
+            {
+                StringFormat c = new StringFormat(); c.Alignment = StringAlignment.Center; c.LineAlignment = StringAlignment.Center;
+                g.DrawString("Установить", f, Brushes.White, rInst, c);
+            }
+
+            // Подвал
+            using (Font f = new Font("Segoe UI", 7.75f * k))
+            using (SolidBrush b = new SolidBrush(footColor))
+                g.DrawString(tFooter.Text, f, b, new RectangleF(24 * k, 438 * k, wTxt * k, 32 * k));
+
+            // Монохромные иконки окна (свернуть / закрыть)
+            using (Pen pi = new Pen(Color.FromArgb(220, 240, 236, 228), 1.2f))
+            {
+                float mx = (Look.W - 51) * k, my = 22 * k;
+                g.DrawLine(pi, mx - 3 * k, my, mx + 3 * k, my);
+                float cx = (Look.W - 23) * k, cy = 22 * k;
+                g.DrawLine(pi, cx - 3 * k, cy - 3 * k, cx + 3 * k, cy + 3 * k);
+                g.DrawLine(pi, cx + 3 * k, cy - 3 * k, cx - 3 * k, cy + 3 * k);
+            }
         }
 
         static Font FitFont(Graphics g, string text, RectangleF box, ref float size, float k)
         {
             while (size > 11f)
             {
-                Font f = new Font("Segoe UI Semibold", size * k * 0.75f * 1.33f);
+                Font f = new Font("Georgia", size * k, FontStyle.Bold);
                 SizeF m = g.MeasureString(text, f, (int)box.Width);
                 if (m.Height <= box.Height) return f;
                 f.Dispose();
                 size -= 1f;
             }
-            return new Font("Segoe UI Semibold", 11f * k * 0.75f * 1.33f);
+            return new Font("Georgia", 11f * k, FontStyle.Bold);
         }
 
         static GraphicsPath Rounded(RectangleF r, float d)
@@ -339,7 +471,7 @@ namespace Vic3Admin
             using (ColorDialog d = new ColorDialog())
             {
                 d.Color = accent; d.FullOpen = true;
-                if (d.ShowDialog(this) == DialogResult.OK) { accent = d.Color; bAccent.BackColor = accent; preview.Invalidate(); }
+                if (d.ShowDialog(this) == DialogResult.OK) { accent = d.Color; bAccent.BackColor = accent; bAccent.ForeColor = Look.IsDark(accent) ? Color.White : Color.Black; preview.Invalidate(); }
             }
         }
 
@@ -560,7 +692,7 @@ namespace Vic3Admin
 
             string payload = tPayload.Text, bgPath = tBg.Text, outPath = tOut.Text;
             string cfgText = "title=" + Esc(tTitle.Text) + "\nsubtitle=" + Esc(tSub.Text) + "\ninfo=" + Esc(tInfo.Text) +
-                             "\nfooter=" + Esc(tFooter.Text) + "\naccent=" + ColorTranslator.ToHtml(accent) + "\ntitlecolor=" + ColorTranslator.ToHtml(titleColor) + "\n";
+                             "\nfooter=" + Esc(tFooter.Text) + "\naccent=" + ColorTranslator.ToHtml(accent) + "\ntitlecolor=" + ColorTranslator.ToHtml(titleColor) + "\n" + CfgExtra();
 
             RunBusy("Сборка установщика…", delegate
             {

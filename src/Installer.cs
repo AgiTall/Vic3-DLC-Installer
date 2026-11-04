@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -62,7 +62,7 @@ namespace Vic3Installer
 
     class Cfg
     {
-        public string Title = "Victoria 3", Subtitle = "", Info = "", Footer = "", Accent = "#7A1F25", TitleColor = "#5A1A1E";
+        public string Title = "Victoria 3", Subtitle = "", Info = "", Footer = "", Accent = "#8E242C", TitleColor = "#E6D2B5", BlurColor = "#1B1E24"; public float Panel = 46f; public int TitleW = 264, TextW = 264;
         public static Cfg Load()
         {
             Cfg c = new Cfg();
@@ -83,6 +83,10 @@ namespace Vic3Installer
                         else if (k == "footer") c.Footer = v;
                         else if (k == "accent") c.Accent = v;
                         else if (k == "titlecolor") c.TitleColor = v;
+                        else if (k == "blurcolor") c.BlurColor = v;
+                        else if (k == "panel") { float f; if (float.TryParse(v, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out f)) c.Panel = f; }
+                        else if (k == "titlew") { int n; if (int.TryParse(v, out n) && n > 50) c.TitleW = n; }
+                        else if (k == "textw") { int n; if (int.TryParse(v, out n) && n > 50) c.TextW = n; }
                     }
                 }
             }
@@ -177,19 +181,22 @@ namespace Vic3Installer
         }
     }
 
+    enum BtnStyle { Primary, Secondary, WinMin, WinClose }
+
     class FlatButton : Control
     {
         bool hover, down;
         public Color Accent = Color.Crimson;
-        public bool Primary = true;
+        public BtnStyle Style = BtnStyle.Primary;
         public Color TextColor = Color.White;
+        public bool DarkTheme = true;
         public FlatButton()
         {
             SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
                      ControlStyles.ResizeRedraw | ControlStyles.SupportsTransparentBackColor | ControlStyles.Selectable, true);
             BackColor = Color.Transparent;
             Cursor = Cursors.Hand;
-            Font = new Font("Segoe UI Semibold", 10.5f);
+            Font = new Font("Segoe UI Semibold", 10f);
         }
         protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
         protected override void OnMouseLeave(EventArgs e) { hover = false; down = false; Invalidate(); base.OnMouseLeave(e); }
@@ -201,15 +208,66 @@ namespace Vic3Installer
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
-            Color fill;
-            if (!Enabled) fill = Color.FromArgb(150, 70, 72, 80);
-            else if (Primary) fill = down ? ControlPaint.Dark(Accent, 0.1f) : (hover ? ControlPaint.Light(Accent, 0.25f) : Accent);
-            else fill = Color.FromArgb(down ? 235 : (hover ? 225 : 205), 240, 228, 208);
-            using (GraphicsPath p = Round(r, 8))
-            using (SolidBrush b = new SolidBrush(fill))
-                g.FillPath(b, p);
-            TextRenderer.DrawText(g, Text, Font, new Rectangle(0, 0, Width, Height),
-                Enabled ? (Primary ? Color.White : TextColor) : Color.FromArgb(160, 160, 165),
+
+            if (Style == BtnStyle.WinMin || Style == BtnStyle.WinClose)
+            {
+                if (hover || down)
+                {
+                    Color wf = Style == BtnStyle.WinClose
+                        ? Color.FromArgb(down ? 235 : 210, 185, 38, 44)
+                        : Color.FromArgb(down ? 110 : 75, 30, 34, 42);
+                    using (GraphicsPath p = Round(r, 4))
+                    using (SolidBrush b = new SolidBrush(wf))
+                        g.FillPath(b, p);
+                }
+                Color ic = (hover || down) ? Color.White : Color.FromArgb(225, 240, 236, 228);
+                Color sh = Color.FromArgb(140, 15, 18, 22);
+                int cx = Width / 2, cy = Height / 2;
+                using (Pen ps = new Pen(sh, 1.8f))
+                using (Pen pi = new Pen(ic, 1.6f))
+                {
+                    if (Style == BtnStyle.WinClose)
+                    {
+                        if (!hover && !down) { g.DrawLine(ps, cx - 4, cy - 3, cx + 4, cy + 5); g.DrawLine(ps, cx + 4, cy - 3, cx - 4, cy + 5); }
+                        g.DrawLine(pi, cx - 4, cy - 4, cx + 4, cy + 4);
+                        g.DrawLine(pi, cx + 4, cy - 4, cx - 4, cy + 4);
+                    }
+                    else
+                    {
+                        if (!hover && !down) g.DrawLine(ps, cx - 5, cy + 2, cx + 5, cy + 2);
+                        g.DrawLine(pi, cx - 5, cy + 1, cx + 5, cy + 1);
+                    }
+                }
+                return;
+            }
+
+            Color fill, border;
+            if (!Enabled)
+            {
+                fill = Color.FromArgb(140, 60, 62, 70);
+                border = Color.FromArgb(100, 90, 92, 100);
+            }
+            else if (Style == BtnStyle.Primary)
+            {
+                fill = down ? ControlPaint.Dark(Accent, 0.12f) : (hover ? ControlPaint.Light(Accent, 0.18f) : Accent);
+                border = Color.FromArgb(180, 195, 158, 100);
+            }
+            else
+            {
+                fill = DarkTheme
+                    ? Color.FromArgb(down ? 235 : (hover ? 215 : 185), 42, 46, 56)
+                    : Color.FromArgb(down ? 230 : (hover ? 210 : 180), 58, 52, 48);
+                border = DarkTheme
+                    ? Color.FromArgb(hover ? 210 : 150, 155, 128, 86)
+                    : Color.FromArgb(hover ? 200 : 140, 120, 96, 70);
+            }
+            using (GraphicsPath p = Round(r, 5))
+            {
+                using (SolidBrush b = new SolidBrush(fill)) g.FillPath(b, p);
+                using (Pen pen = new Pen(border, 1f)) g.DrawPath(pen, p);
+            }
+            Color tc = !Enabled ? Color.FromArgb(150, 150, 155) : (Style == BtnStyle.Primary ? Color.FromArgb(248, 242, 230) : TextColor);
+            TextRenderer.DrawText(g, Text, Font, new Rectangle(0, 0, Width, Height), tc,
                 TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine);
         }
         public static GraphicsPath Round(Rectangle r, int d)
@@ -221,6 +279,77 @@ namespace Vic3Installer
             p.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
             p.CloseFigure();
             return p;
+        }
+    }
+
+    class PathBox : Control
+    {
+        public TextBox Inner;
+        public Color BorderColor = Color.FromArgb(145, 150, 124, 82);
+        public Color FillColor = Color.FromArgb(228, 30, 34, 42);
+        public PathBox(Color fill, Color fore, Color border)
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
+                     ControlStyles.ResizeRedraw | ControlStyles.SupportsTransparentBackColor, true);
+            BackColor = Color.Transparent;
+            FillColor = fill;
+            BorderColor = border;
+            Inner = new TextBox();
+            Inner.BorderStyle = BorderStyle.None;
+            Inner.BackColor = Color.FromArgb(255, fill.R, fill.G, fill.B);
+            Inner.ForeColor = fore;
+            Inner.Font = new Font("Segoe UI", 9f);
+            Controls.Add(Inner);
+        }
+        protected override void OnResize(EventArgs e)
+        {
+            base.OnResize(e);
+            if (Inner != null)
+                Inner.SetBounds(9, (Height - Inner.PreferredHeight) / 2, Math.Max(20, Width - 18), Inner.PreferredHeight);
+        }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
+            using (GraphicsPath p = FlatButton.Round(r, 5))
+            {
+                using (SolidBrush b = new SolidBrush(FillColor)) g.FillPath(b, p);
+                using (Pen pen = new Pen(BorderColor, 1f)) g.DrawPath(pen, p);
+            }
+        }
+    }
+
+    class GfxLabel : Control
+    {
+        public bool AlignBottom;
+        public bool DropShadow;
+        public GfxLabel()
+        {
+            SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer |
+                     ControlStyles.ResizeRedraw | ControlStyles.SupportsTransparentBackColor, true);
+            BackColor = Color.Transparent;
+        }
+        protected override void OnTextChanged(EventArgs e) { Invalidate(); base.OnTextChanged(e); }
+        protected override void OnFontChanged(EventArgs e) { Invalidate(); base.OnFontChanged(e); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            Graphics g = e.Graphics;
+            g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
+            using (StringFormat sf = new StringFormat())
+            {
+                sf.FormatFlags = StringFormatFlags.LineLimit;
+                sf.Trimming = StringTrimming.EllipsisWord;
+                sf.LineAlignment = AlignBottom ? StringAlignment.Far : StringAlignment.Near;
+                RectangleF rf = new RectangleF(0, 0, Width, Height);
+                if (DropShadow)
+                {
+                    using (SolidBrush sb = new SolidBrush(Color.FromArgb(140, 10, 12, 16)))
+                        g.DrawString(Text, Font, sb, new RectangleF(1f, 1f, Width, Height), sf);
+                }
+                using (SolidBrush b = new SolidBrush(ForeColor))
+                    g.DrawString(Text, Font, b, rf, sf);
+            }
         }
     }
 
@@ -240,14 +369,14 @@ namespace Vic3Installer
             Graphics g = e.Graphics;
             g.SmoothingMode = SmoothingMode.AntiAlias;
             Rectangle r = new Rectangle(0, 0, Width - 1, Height - 1);
-            using (GraphicsPath p = FlatButton.Round(r, Height - 1))
-            using (SolidBrush b = new SolidBrush(Color.FromArgb(70, 70, 45, 35)))
+            using (GraphicsPath p = FlatButton.Round(r, 4))
+            using (SolidBrush b = new SolidBrush(Color.FromArgb(140, 26, 28, 34)))
                 g.FillPath(b, p);
             int w = (int)((Width - 1) * (val / 1000.0));
-            if (w > Height)
+            if (w > 6)
             {
-                using (GraphicsPath p = FlatButton.Round(new Rectangle(0, 0, w, Height - 1), Height - 1))
-                using (LinearGradientBrush b = new LinearGradientBrush(new Rectangle(0, 0, Math.Max(w, 2), Height), ControlPaint.Dark(Accent, 0.1f), ControlPaint.Light(Accent, 0.3f), 0f))
+                using (GraphicsPath p = FlatButton.Round(new Rectangle(0, 0, w, Height - 1), 4))
+                using (LinearGradientBrush b = new LinearGradientBrush(new Rectangle(0, 0, Math.Max(w, 2), Height), ControlPaint.Dark(Accent, 0.08f), ControlPaint.Light(Accent, 0.25f), 0f))
                     g.FillPath(b, p);
             }
         }
@@ -259,25 +388,28 @@ namespace Vic3Installer
         [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr h, int m, int w, int l);
 
         Cfg cfg;
-        Color accent, titleColor;
+        Color accent, titleColor, blurColor;
+        bool isDark;
         Bitmap sharp, blurred;
         float blurAmt = 1f, blurTarget = 1f;
         System.Windows.Forms.Timer anim;
-        Label lblTitle, lblSub, lblInfo, lblPathCap, lblStatus, lblFooter;
+        GfxLabel lblTitle, lblSub, lblInfo, lblPathCap, lblStatus, lblFooter;
+        PathBox boxPath;
         TextBox txtPath;
         FlatButton btnBrowse, btnInstall, btnStop, btnCancel;
         GfxProgress bar;
         bool busy, done, paused, cancel, forceClose;
         ManualResetEvent runEv = new ManualResetEvent(true);
 
-        static readonly Color InkDark = Color.FromArgb(62, 42, 34);
-        const int CX = 24, CW = 250;
+        const int CX = 24, CW = 256;
 
         public MainForm()
         {
             cfg = Cfg.Load();
-            accent = Look.ParseColor(cfg.Accent, Color.FromArgb(122, 31, 37));
-            titleColor = Look.ParseColor(cfg.TitleColor, Color.FromArgb(90, 26, 30));
+            blurColor = Look.ParseColor(cfg.BlurColor, Color.FromArgb(27, 30, 36));
+            isDark = Look.IsDark(blurColor);
+            accent = Look.ParseColor(cfg.Accent, Color.FromArgb(142, 36, 44));
+            titleColor = Look.ParseColor(cfg.TitleColor, isDark ? Color.FromArgb(230, 210, 181) : Color.FromArgb(90, 26, 30));
 
             FormBorderStyle = FormBorderStyle.None;
             StartPosition = FormStartPosition.CenterScreen;
@@ -302,42 +434,47 @@ namespace Vic3Installer
                 }
             }
             catch { }
-            blurred = Look.Build(src, out sharp);
+            blurred = Look.Build(src, out sharp, cfg.Panel, blurColor);
 
-            lblTitle = MakeLabel(cfg.Title, new Font("Segoe UI Semibold", 20f), titleColor);
-            lblSub = MakeLabel(cfg.Subtitle, new Font("Segoe UI Semibold", 10.5f), accent);
-            lblInfo = MakeLabel(cfg.Info, new Font("Segoe UI", 8.75f), InkDark);
-            lblPathCap = MakeLabel("Папка Victoria 3", new Font("Segoe UI", 8.5f), Color.FromArgb(120, 92, 76));
-            lblStatus = MakeLabel("Поиск Steam-версии игры…", new Font("Segoe UI", 8.75f), InkDark);
-            lblFooter = MakeLabel(cfg.Footer, new Font("Segoe UI", 7.5f), Color.FromArgb(120, 98, 84));
+            Color bodyColor = isDark ? Color.FromArgb(218, 210, 198) : Color.FromArgb(52, 36, 28);
+            Color subColor = isDark ? Color.FromArgb(204, 166, 108) : accent;
+            Color capColor = isDark ? Color.FromArgb(168, 152, 130) : Color.FromArgb(105, 80, 66);
+            Color footColor = isDark ? Color.FromArgb(182, 168, 148) : Color.FromArgb(88, 68, 56);
 
-            txtPath = new TextBox();
-            txtPath.BorderStyle = BorderStyle.FixedSingle;
-            txtPath.BackColor = Color.FromArgb(250, 244, 232);
-            txtPath.ForeColor = InkDark;
-            txtPath.Font = new Font("Segoe UI", 9f);
-            Controls.Add(txtPath);
+            lblTitle = MakeLabel(cfg.Title, new Font("Georgia", 19f, FontStyle.Bold), titleColor, isDark);
+            lblSub = MakeLabel(cfg.Subtitle, new Font("Georgia", 10.25f, FontStyle.Bold), subColor, isDark);
+            lblInfo = MakeLabel(cfg.Info, new Font("Segoe UI", 8.75f), bodyColor, false);
+            lblPathCap = MakeLabel("Папка Victoria 3", new Font("Segoe UI Semibold", 8.25f), capColor, false);
+            lblStatus = MakeLabel("Поиск Steam-версии игры…", new Font("Segoe UI", 8.5f), bodyColor, false);
+            lblFooter = MakeLabel(cfg.Footer, new Font("Segoe UI", 7.75f), footColor, isDark);
 
-            btnBrowse = MakeBtn("Обзор", false);
-            btnBrowse.Font = new Font("Segoe UI", 8.75f);
+            Color boxFill = isDark ? Color.FromArgb(230, 32, 36, 44) : Color.FromArgb(235, 244, 238, 228);
+            Color boxFore = isDark ? Color.FromArgb(232, 226, 214) : Color.FromArgb(48, 34, 26);
+            Color boxBorder = isDark ? Color.FromArgb(145, 148, 122, 80) : Color.FromArgb(150, 140, 118, 92);
+            boxPath = new PathBox(boxFill, boxFore, boxBorder);
+            txtPath = boxPath.Inner;
+            Controls.Add(boxPath);
+
+            btnBrowse = MakeBtn("Обзор", BtnStyle.Secondary);
+            btnBrowse.Font = new Font("Segoe UI Semibold", 8.5f);
             btnBrowse.Click += delegate { Browse(); };
 
             bar = new GfxProgress();
             bar.Accent = accent;
             Controls.Add(bar);
 
-            btnInstall = MakeBtn("Установить", true);
+            btnInstall = MakeBtn("Установить", BtnStyle.Primary);
             btnInstall.Click += delegate { OnMainClick(); };
-            btnStop = MakeBtn("Стоп", false);
+            btnStop = MakeBtn("Стоп", BtnStyle.Secondary);
             btnStop.Click += delegate { TogglePause(); };
-            btnCancel = MakeBtn("Отмена", false);
+            btnCancel = MakeBtn("Отмена", BtnStyle.Secondary);
             btnCancel.Click += delegate { AskCancel(); };
 
-            FlatButton close = MakeBtn("✕", false);
-            close.SetBounds(Look.W - 34, 10, 28, 24); close.Font = new Font("Segoe UI", 9f); 
+            FlatButton close = MakeBtn("", BtnStyle.WinClose);
+            close.SetBounds(Look.W - 36, 10, 26, 24);
             close.Click += delegate { if (busy) AskCancel(); else Close(); };
-            FlatButton min = MakeBtn("–", false);
-            min.SetBounds(Look.W - 66, 10, 28, 24); min.Font = new Font("Segoe UI", 9f); 
+            FlatButton min = MakeBtn("", BtnStyle.WinMin);
+            min.SetBounds(Look.W - 64, 10, 26, 24);
             min.Click += delegate { WindowState = FormWindowState.Minimized; };
 
             MouseDown += Drag;
@@ -357,58 +494,58 @@ namespace Vic3Installer
             Shown += delegate { Detect(); };
         }
 
-        FlatButton MakeBtn(string t, bool primary)
+        FlatButton MakeBtn(string t, BtnStyle style)
         {
             FlatButton b = new FlatButton();
-            b.Primary = primary; b.Accent = accent; b.Text = t;
-            if (!primary) b.TextColor = InkDark;
+            b.Style = style; b.Accent = accent; b.Text = t; b.DarkTheme = isDark;
+            b.TextColor = isDark ? Color.FromArgb(228, 220, 206) : Color.FromArgb(242, 236, 226);
             Controls.Add(b);
             return b;
         }
 
-        Label MakeLabel(string text, Font f, Color c)
+        GfxLabel MakeLabel(string text, Font f, Color c, bool shadow)
         {
-            Label l = new Label();
-            l.AutoSize = false;
-            l.BackColor = Color.Transparent;
+            GfxLabel l = new GfxLabel();
             l.ForeColor = c;
             l.Font = f;
             l.Text = text;
+            l.DropShadow = shadow;
             Controls.Add(l);
             return l;
         }
 
-        // Два режима: ввод параметров (размытая панель слева) и установка (чистый фон).
+        // Два режима: ввод параметров (сайдбар слева) и установка (чистый фон).
         void SetLayout(bool inst)
         {
-            lblSub.Visible = lblInfo.Visible = lblPathCap.Visible = txtPath.Visible = btnBrowse.Visible = !inst;
+            lblSub.Visible = lblInfo.Visible = lblPathCap.Visible = boxPath.Visible = btnBrowse.Visible = !inst;
             bar.Visible = btnStop.Visible = btnCancel.Visible = inst;
             if (!inst)
             {
-                lblTitle.SetBounds(CX, 44, CW, 80);
-                lblTitle.TextAlign = ContentAlignment.BottomLeft;
-                FitTitle(CW, 80);
-                lblSub.SetBounds(CX, 128, CW, 22);
-                lblInfo.SetBounds(CX, 156, CW, 116);
-                lblPathCap.SetBounds(CX, 276, CW, 18);
-                txtPath.SetBounds(CX, 296, 180, 26);
-                btnBrowse.SetBounds(CX + 186, 296, 64, 25);
-                lblStatus.SetBounds(CX, 328, CW, 50);
-                btnInstall.SetBounds(CX, 392, CW, 42);
-                lblFooter.SetBounds(CX, 444, CW, 30);
+                int wTxt = Math.Max(200, cfg.TextW);
+                int wTitle = Math.Max(200, cfg.TitleW);
+                int wCtrl = Math.Min(wTxt, 272);
+                lblTitle.SetBounds(CX, 28, wTitle, 74);
+                FitTitle(wTitle, 74);
+                lblSub.SetBounds(CX, 106, wTxt, 22);
+                lblInfo.SetBounds(CX, 134, wTxt, 136);
+                lblPathCap.SetBounds(CX, 274, wCtrl, 18);
+                boxPath.SetBounds(CX, 294, wCtrl - 74, 28);
+                btnBrowse.SetBounds(CX + wCtrl - 68, 294, 68, 28);
+                lblStatus.SetBounds(CX, 328, wTxt, 50);
+                btnInstall.SetBounds(CX, 386, wCtrl, 40);
+                lblFooter.SetBounds(CX, 438, wTxt, 32);
                 btnInstall.Visible = true;
             }
             else
             {
                 lblTitle.SetBounds(CX, 16, 520, 44);
-                lblTitle.TextAlign = ContentAlignment.TopLeft;
                 FitTitle(520, 44);
-                lblStatus.SetBounds(CX, 390, 592, 18);
+                lblStatus.SetBounds(CX, 388, 592, 20);
                 bar.SetBounds(CX, 412, 592, 8);
-                btnStop.SetBounds(CX, 430, 100, 30);
-                btnCancel.SetBounds(CX + 108, 430, 100, 30);
-                btnInstall.SetBounds(CX, 430, 120, 30);
-                lblFooter.SetBounds(CX, 464, 592, 14);
+                btnStop.SetBounds(CX, 428, 104, 30);
+                btnCancel.SetBounds(CX + 112, 428, 104, 30);
+                btnInstall.SetBounds(CX, 428, 124, 30);
+                lblFooter.SetBounds(CX, 462, 592, 16);
                 btnInstall.Visible = false;
             }
         }
@@ -417,17 +554,19 @@ namespace Vic3Installer
 
         void FitTitle(int w, int h)
         {
-            float size = 22f;
-            while (size > 11f)
+            using (Graphics g = CreateGraphics())
             {
-                using (Font f = new Font("Segoe UI Semibold", size))
+                float size = 20f;
+                while (size > 11f)
                 {
-                    Size s = TextRenderer.MeasureText(lblTitle.Text, f, new Size(w, 1000), TextFormatFlags.WordBreak);
-                    if (s.Height <= h) { lblTitle.Font = new Font("Segoe UI Semibold", size); return; }
+                    Font f = new Font("Georgia", size, FontStyle.Bold);
+                    SizeF s = g.MeasureString(lblTitle.Text, f, w);
+                    if (s.Height <= h) { lblTitle.Font = f; return; }
+                    f.Dispose();
+                    size -= 1f;
                 }
-                size -= 1f;
             }
-            lblTitle.Font = new Font("Segoe UI Semibold", 11f);
+            lblTitle.Font = new Font("Georgia", 11f, FontStyle.Bold);
         }
 
         void Drag(object s, MouseEventArgs e)
@@ -454,18 +593,18 @@ namespace Vic3Installer
             float k = 1f - blurAmt;
             if (k > 0.01f)
             {
-                Rectangle top = new Rectangle(0, 0, Look.W, 80);
-                using (LinearGradientBrush b = new LinearGradientBrush(top, Color.FromArgb((int)(150 * k), 238, 226, 206), Color.FromArgb(0, 238, 226, 206), 90f))
+                Rectangle top = new Rectangle(0, 0, Look.W, 84);
+                using (LinearGradientBrush b = new LinearGradientBrush(top, Color.FromArgb((int)(200 * k), 20, 22, 28), Color.FromArgb(0, 20, 22, 28), 90f))
                     g.FillRectangle(b, top);
-                Rectangle bot = new Rectangle(0, Look.H - 100, Look.W, 100);
-                using (LinearGradientBrush b = new LinearGradientBrush(bot, Color.FromArgb(0, 238, 226, 206), Color.FromArgb((int)(195 * k), 238, 226, 206), 90f))
+                Rectangle bot = new Rectangle(0, Look.H - 110, Look.W, 110);
+                using (LinearGradientBrush b = new LinearGradientBrush(bot, Color.FromArgb(0, 20, 22, 28), Color.FromArgb((int)(225 * k), 20, 22, 28), 90f))
                     g.FillRectangle(b, bot);
             }
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            using (Pen p = new Pen(Color.FromArgb(110, 60, 40, 30)))
+            using (Pen p = new Pen(Color.FromArgb(160, 148, 120, 78)))
                 e.Graphics.DrawRectangle(p, 0, 0, Width - 1, Height - 1);
         }
 

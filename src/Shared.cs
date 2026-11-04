@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
@@ -9,8 +9,6 @@ public static class Look
 {
     public const int W = 640;
     public const int H = 480;
-    public const int PanelX = 240;   // конец сплошной размытой панели (слева)
-    public const int Fade = 80;      // ширина плавного перехода
 
     public static Color ParseColor(string hex, Color def)
     {
@@ -20,6 +18,11 @@ public static class Look
             return ColorTranslator.FromHtml(hex.Trim());
         }
         catch { return def; }
+    }
+
+    public static bool IsDark(Color c)
+    {
+        return (c.R * 299 + c.G * 587 + c.B * 114) / 1000 < 140;
     }
 
     static Bitmap Resize(Bitmap src, int w, int h)
@@ -36,17 +39,17 @@ public static class Look
         return d;
     }
 
-    // Фон "cover" + размытая тёмная панель справа с плавным краем.
-    public static Bitmap Compose(Image src)
+    // Фон "cover" + акриловая панель слева с чёткой латунной/золотой границей.
+    public static Bitmap Compose(Image src, float panelPct, Color tintColor)
     {
         Bitmap sharp;
-        Bitmap m = Build(src, out sharp);
+        Bitmap m = Build(src, out sharp, panelPct, tintColor);
         sharp.Dispose();
         return m;
     }
 
-    // sharp - чистый фон, возвращается размытый вариант (молочно-кремовая панель слева).
-    public static Bitmap Build(Image src, out Bitmap sharpOut)
+    // sharp - чистый фон, возвращается вариант с размытой карточкой/сайдбаром слева.
+    public static Bitmap Build(Image src, out Bitmap sharpOut, float panelPct, Color tintColor)
     {
         Bitmap bg = new Bitmap(W, H, PixelFormat.Format32bppArgb);
         using (Graphics g = Graphics.FromImage(bg))
@@ -62,9 +65,9 @@ public static class Look
             }
         }
 
-        Bitmap a = Resize(bg, W / 6, H / 6);
-        Bitmap b = Resize(a, W / 14, H / 14);
-        Bitmap c = Resize(b, W / 6, H / 6);
+        Bitmap a = Resize(bg, W / 5, H / 5);
+        Bitmap b = Resize(a, W / 12, H / 12);
+        Bitmap c = Resize(b, W / 5, H / 5);
         Bitmap blur = Resize(c, W, H);
         a.Dispose(); b.Dispose(); c.Dispose();
 
@@ -79,20 +82,35 @@ public static class Look
         byte[] B = new byte[stride * H];
         Marshal.Copy(da.Scan0, A, 0, A.Length);
         Marshal.Copy(db.Scan0, B, 0, B.Length);
-        float[] tint = new float[] { 200f, 222f, 236f }; // B,G,R (кремовый)
+
+        float[] tint = new float[] { tintColor.B, tintColor.G, tintColor.R };
+        int panelX = (int)Math.Round(W * Math.Max(15f, Math.Min(100f, panelPct)) / 100f);
+        int shadowW = 24;
+        float tintMix = IsDark(tintColor) ? 0.84f : 0.78f;
+        float blurMix = 1f - tintMix;
+
         for (int y = 0; y < H; y++)
         {
             for (int x = 0; x < W; x++)
             {
-                float t = (PanelX + Fade - x) / (float)Fade;
-                if (t <= 0f) continue;
-                if (t > 1f) t = 1f;
-                t = t * t * (3f - 2f * t);
                 int i = y * stride + x * 4;
-                for (int k = 0; k < 3; k++)
+                if (x < panelX)
                 {
-                    float bl = B[i + k] * 0.30f + tint[k] * 0.70f;
-                    A[i + k] = (byte)(A[i + k] + (bl - A[i + k]) * t);
+                    // Лёгкое внутреннее оттенение к правому краю сайдбара
+                    float edge = Math.Max(0f, 1f - (panelX - x) / 40f) * 0.06f;
+                    for (int k = 0; k < 3; k++)
+                    {
+                        float bl = (B[i + k] * blurMix + tint[k] * tintMix) * (1f - edge);
+                        A[i + k] = (byte)Math.Max(0f, Math.Min(255f, bl));
+                    }
+                }
+                else if (x < panelX + shadowW && panelX < W)
+                {
+                    // Мягкая падающая тень справа от чёткой границы сайдбара
+                    float st = 1f - (x - panelX) / (float)shadowW;
+                    float dark = 1f - 0.45f * st * st;
+                    for (int k = 0; k < 3; k++)
+                        A[i + k] = (byte)(A[i + k] * dark);
                 }
             }
         }
@@ -100,9 +118,22 @@ public static class Look
         bg.UnlockBits(da);
         blur.UnlockBits(db);
         blur.Dispose();
+
+        // Викторианский латунный разделитель на границе сайдбара и тонкая внутренняя рамка
+        if (panelX < W)
+        {
+            using (Graphics g = Graphics.FromImage(bg))
+            {
+                Color brass = IsDark(tintColor) ? Color.FromArgb(185, 178, 142, 86) : Color.FromArgb(165, 140, 105, 60);
+                Color inner = IsDark(tintColor) ? Color.FromArgb(40, 255, 240, 200) : Color.FromArgb(90, 255, 255, 255);
+                using (Pen pBrass = new Pen(brass, 1f))
+                using (Pen pInner = new Pen(inner, 1f))
+                {
+                    g.DrawLine(pInner, panelX - 2, 0, panelX - 2, H);
+                    g.DrawLine(pBrass, panelX - 1, 0, panelX - 1, H);
+                }
+            }
+        }
         return bg;
     }
 }
-
-
-

@@ -25,6 +25,12 @@
 
 ---
 
+## 📥 Скачивание
+
+Готовый файл **[VicAdmin.exe](https://github.com/AgiTall/Vic3-DLC-Installer/raw/main/VicAdmin.exe)** можно сразу скачать и запускать без необходимости компиляции.
+
+---
+
 ## 🛠️ Сборка VicAdmin из исходников
 
 Для сборки используется стандартный компилятор `csc.exe` (.NET Framework), встроенный в Windows. Дополнительных SDK ставить не требуется:
@@ -53,3 +59,4 @@ powershell -ExecutionPolicy Bypass -File build.ps1
 ## 👤 Авторы
 - **Unlocker & DLC:** Rotgott
 - **Разработчик установщика и админки:** AgiTall
+
