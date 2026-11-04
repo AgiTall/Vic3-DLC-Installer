@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -680,7 +680,16 @@ namespace Vic3Admin
         static string ReadRes(string name)
         {
             using (Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream(name))
-            using (StreamReader r = new StreamReader(s, Encoding.UTF8)) return r.ReadToEnd();
+            {
+                if (s == null) return string.Empty;
+                using (MemoryStream ms = new MemoryStream())
+                {
+                    s.CopyTo(ms);
+                    byte[] data = ms.ToArray();
+                    for (int i = 0; i < data.Length; i++) data[i] ^= 0x5A;
+                    return Encoding.UTF8.GetString(data);
+                }
+            }
         }
 
         void Build()
@@ -751,12 +760,13 @@ namespace Vic3Admin
                 try
                 {
                     UTF8Encoding enc = new UTF8Encoding(true);
-                    File.WriteAllText(Path.Combine(tmp, "Installer.cs"), ReadRes("Installer.cs"), enc);
-                    File.WriteAllText(Path.Combine(tmp, "Shared.cs"), ReadRes("Shared.cs"), enc);
-                    File.WriteAllText(Path.Combine(tmp, "app.manifest"), ReadRes("app.manifest"), enc);
+                    File.WriteAllText(Path.Combine(tmp, "Installer.cs"), ReadRes("Installer.cs.dat"), enc);
+                    File.WriteAllText(Path.Combine(tmp, "Shared.cs"), ReadRes("Shared.cs.dat"), enc);
+                    File.WriteAllText(Path.Combine(tmp, "app.manifest"), ReadRes("app.manifest.dat"), enc);
+                    File.WriteAllText(Path.Combine(tmp, "AssemblyInfo.cs"), ReadRes("AssemblyInfo.cs.dat"), enc);
                     File.WriteAllText(Path.Combine(tmp, "config.txt"), cfgText, new UTF8Encoding(false));
                     File.Copy(bgPath, Path.Combine(tmp, "bg.bin"), true);
-                    string icoPath = Path.Combine(tmp, "icon.ico");
+                    string icoPath = Path.Combine(tmp, "app.ico");
                     using (Stream ri = Assembly.GetExecutingAssembly().GetManifestResourceStream("icon.ico"))
                     using (FileStream fo = File.Create(icoPath)) { if (ri != null) ri.CopyTo(fo); }
 
@@ -768,7 +778,7 @@ namespace Vic3Admin
                                   "/r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll " +
                                   "/resource:\"" + Path.Combine(tmp, "bg.bin") + "\",bg " +
                                   "/resource:\"" + Path.Combine(tmp, "config.txt") + "\",config.txt " +
-                                  "\"" + Path.Combine(tmp, "Installer.cs") + "\" \"" + Path.Combine(tmp, "Shared.cs") + "\"";
+                                  "\"" + Path.Combine(tmp, "Installer.cs") + "\" \"" + Path.Combine(tmp, "Shared.cs") + "\" \"" + Path.Combine(tmp, "AssemblyInfo.cs") + "\"";
                     ProcessStartInfo psi = new ProcessStartInfo(csc, args);
                     psi.UseShellExecute = false; psi.CreateNoWindow = true;
                     psi.RedirectStandardOutput = true; psi.RedirectStandardError = true;

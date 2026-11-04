@@ -1,5 +1,6 @@
 # Cache and temporary build files
 cache/
+res_cache/
 Output/
 *.tmp
 *.log
