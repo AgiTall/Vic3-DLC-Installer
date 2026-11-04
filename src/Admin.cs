@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -756,11 +756,14 @@ namespace Vic3Admin
                     File.WriteAllText(Path.Combine(tmp, "app.manifest"), ReadRes("app.manifest"), enc);
                     File.WriteAllText(Path.Combine(tmp, "config.txt"), cfgText, new UTF8Encoding(false));
                     File.Copy(bgPath, Path.Combine(tmp, "bg.bin"), true);
+                    string icoPath = Path.Combine(tmp, "icon.ico");
+                    using (Stream ri = Assembly.GetExecutingAssembly().GetManifestResourceStream("icon.ico"))
+                    using (FileStream fo = File.Create(icoPath)) { if (ri != null) ri.CopyTo(fo); }
 
                     string stub = Path.Combine(tmp, "stub.exe");
                     string csc = Path.Combine(RuntimeEnvironment_Dir(), "csc.exe");
                     string args = "/nologo /target:winexe /optimize+ /codepage:65001 /platform:anycpu /out:\"" + stub + "\" " +
-                                  "/win32manifest:\"" + Path.Combine(tmp, "app.manifest") + "\" " +
+                                  "/win32manifest:\"" + Path.Combine(tmp, "app.manifest") + "\" " + (new FileInfo(icoPath).Length > 0 ? "/win32icon:\"" + icoPath + "\" " : "") +
                                   "/r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll " +
                                   "/r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll " +
                                   "/resource:\"" + Path.Combine(tmp, "bg.bin") + "\",bg " +
