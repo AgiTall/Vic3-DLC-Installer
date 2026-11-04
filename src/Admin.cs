@@ -1,4 +1,5 @@
 using System;
+using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
@@ -11,6 +12,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
+using Microsoft.CSharp;
 
 // Приложение администратора: управляет содержимым, оформлением и собирает новый exe-установщик.
 namespace Vic3Admin
@@ -771,24 +773,37 @@ namespace Vic3Admin
                     using (FileStream fo = File.Create(icoPath)) { if (ri != null) ri.CopyTo(fo); }
 
                     string stub = Path.Combine(tmp, "stub.exe");
-                    string csc = Path.Combine(RuntimeEnvironment_Dir(), "csc.exe");
-                    string args = "/nologo /target:winexe /optimize+ /codepage:65001 /platform:anycpu /out:\"" + stub + "\" " +
-                                  "/win32manifest:\"" + Path.Combine(tmp, "app.manifest") + "\" " + (new FileInfo(icoPath).Length > 0 ? "/win32icon:\"" + icoPath + "\" " : "") +
-                                  "/r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll " +
-                                  "/r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll " +
-                                  "/resource:\"" + Path.Combine(tmp, "bg.bin") + "\",bg " +
-                                  "/resource:\"" + Path.Combine(tmp, "config.txt") + "\",config.txt " +
-                                  "\"" + Path.Combine(tmp, "Installer.cs") + "\" \"" + Path.Combine(tmp, "Shared.cs") + "\" \"" + Path.Combine(tmp, "AssemblyInfo.cs") + "\"";
-                    ProcessStartInfo psi = new ProcessStartInfo(csc, args);
-                    psi.UseShellExecute = false; psi.CreateNoWindow = true;
-                    psi.RedirectStandardOutput = true; psi.RedirectStandardError = true;
-                    psi.WorkingDirectory = tmp;
-                    string outp;
-                    using (Process p = Process.Start(psi))
+                    string srcInstaller = Path.Combine(tmp, "Installer.cs");
+                    string srcShared = Path.Combine(tmp, "Shared.cs");
+                    string srcAssembly = Path.Combine(tmp, "AssemblyInfo.cs");
+                    string manifestPath = Path.Combine(tmp, "app.manifest");
+                    string resBg = Path.Combine(tmp, "bg.bin");
+                    string resCfg = Path.Combine(tmp, "config.txt");
+
+                    using (CSharpCodeProvider provider = new CSharpCodeProvider())
                     {
-                        outp = p.StandardOutput.ReadToEnd() + p.StandardError.ReadToEnd();
-                        p.WaitForExit();
-                        if (p.ExitCode != 0) return "Ошибка компиляции:\n" + outp;
+                        CompilerParameters cp = new CompilerParameters();
+                        cp.GenerateExecutable = true;
+                        cp.OutputAssembly = stub;
+                        cp.IncludeDebugInformation = false;
+                        cp.CompilerOptions = "/optimize+ /platform:anycpu /target:winexe /win32manifest:\"" + manifestPath + "\"" +
+                                             (new FileInfo(icoPath).Length > 0 ? " /win32icon:\"" + icoPath + "\"" : "");
+                        cp.ReferencedAssemblies.Add("System.dll");
+                        cp.ReferencedAssemblies.Add("System.Core.dll");
+                        cp.ReferencedAssemblies.Add("System.Drawing.dll");
+                        cp.ReferencedAssemblies.Add("System.Windows.Forms.dll");
+                        cp.ReferencedAssemblies.Add("System.IO.Compression.dll");
+                        cp.ReferencedAssemblies.Add("System.IO.Compression.FileSystem.dll");
+                        cp.EmbeddedResources.Add(resBg + ",bg");
+                        cp.EmbeddedResources.Add(resCfg + ",config.txt");
+
+                        CompilerResults cr = provider.CompileAssemblyFromFile(cp, srcInstaller, srcShared, srcAssembly);
+                        if (cr.Errors.HasErrors)
+                        {
+                            StringBuilder sbErr = new StringBuilder();
+                            foreach (CompilerError ce in cr.Errors) sbErr.AppendLine(ce.ToString());
+                            return "Ошибка компиляции:\n" + sbErr.ToString();
+                        }
                     }
 
                     // 3. exe = оболочка + zip + трейлер
@@ -817,8 +832,6 @@ namespace Vic3Admin
                 return null;
             });
         }
-
-        static string RuntimeEnvironment_Dir() { return System.Runtime.InteropServices.RuntimeEnvironment.GetRuntimeDirectory(); }
     }
 }
 
