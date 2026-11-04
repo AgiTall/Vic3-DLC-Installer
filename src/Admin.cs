@@ -6,7 +6,6 @@ using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.IO;
 using System.IO.Compression;
-using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
@@ -677,17 +676,6 @@ namespace Vic3Admin
         }
 
         // ---------- Build ----------
-        static string ReadRes(string name)
-        {
-            using (Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream(name))
-            {
-                if (s == null) return string.Empty;
-                using (DeflateStream ds = new DeflateStream(s, CompressionMode.Decompress))
-                using (StreamReader r = new StreamReader(ds, Encoding.UTF8))
-                    return r.ReadToEnd();
-            }
-        }
-
         void Build()
         {
             if (!PayloadOk()) return;
@@ -749,30 +737,19 @@ namespace Vic3Admin
                     File.WriteAllText(sigPath, sigText);
                 }
 
-                // 2. компиляция оболочки установщика
+                // 2. компиляция оболочки установщика напрямую из папки src
                 SetStatus("Компиляция установщика…", 620);
-                string tmp = Path.Combine(Path.GetTempPath(), "vic3build_" + Guid.NewGuid().ToString("N"));
-                Directory.CreateDirectory(tmp);
+                string srcDir = Path.Combine(baseDir, "src");
+                string stub = Path.Combine(cache, "stub.exe");
+                string resCfg = Path.Combine(cache, "config.txt");
+                string resBg = Path.Combine(cache, "bg.bin");
+                string icoPath = Path.Combine(baseDir, "assets\\icon.ico");
+                string manifestPath = Path.Combine(srcDir, "app.manifest");
+
                 try
                 {
-                    UTF8Encoding enc = new UTF8Encoding(true);
-                    File.WriteAllText(Path.Combine(tmp, "Installer.cs"), ReadRes("Installer.cs.dat"), enc);
-                    File.WriteAllText(Path.Combine(tmp, "Shared.cs"), ReadRes("Shared.cs.dat"), enc);
-                    File.WriteAllText(Path.Combine(tmp, "app.manifest"), ReadRes("app.manifest.dat"), enc);
-                    File.WriteAllText(Path.Combine(tmp, "AssemblyInfo.cs"), ReadRes("AssemblyInfo.cs.dat"), enc);
-                    File.WriteAllText(Path.Combine(tmp, "config.txt"), cfgText, new UTF8Encoding(false));
-                    File.Copy(bgPath, Path.Combine(tmp, "bg.bin"), true);
-                    string icoPath = Path.Combine(tmp, "app.ico");
-                    using (Stream ri = Assembly.GetExecutingAssembly().GetManifestResourceStream("icon.ico"))
-                    using (FileStream fo = File.Create(icoPath)) { if (ri != null) ri.CopyTo(fo); }
-
-                    string stub = Path.Combine(tmp, "stub.exe");
-                    string srcInstaller = Path.Combine(tmp, "Installer.cs");
-                    string srcShared = Path.Combine(tmp, "Shared.cs");
-                    string srcAssembly = Path.Combine(tmp, "AssemblyInfo.cs");
-                    string manifestPath = Path.Combine(tmp, "app.manifest");
-                    string resBg = Path.Combine(tmp, "bg.bin");
-                    string resCfg = Path.Combine(tmp, "config.txt");
+                    File.WriteAllText(resCfg, cfgText, new UTF8Encoding(false));
+                    File.Copy(bgPath, resBg, true);
 
                     using (CSharpCodeProvider provider = new CSharpCodeProvider())
                     {
@@ -781,7 +758,7 @@ namespace Vic3Admin
                         cp.OutputAssembly = stub;
                         cp.IncludeDebugInformation = false;
                         cp.CompilerOptions = "/optimize+ /platform:anycpu /target:winexe /win32manifest:\"" + manifestPath + "\"" +
-                                             (new FileInfo(icoPath).Length > 0 ? " /win32icon:\"" + icoPath + "\"" : "");
+                                             (File.Exists(icoPath) ? " /win32icon:\"" + icoPath + "\"" : "");
                         cp.ReferencedAssemblies.Add("System.dll");
                         cp.ReferencedAssemblies.Add("System.Core.dll");
                         cp.ReferencedAssemblies.Add("System.Drawing.dll");
@@ -791,7 +768,10 @@ namespace Vic3Admin
                         cp.EmbeddedResources.Add(resBg + ",bg");
                         cp.EmbeddedResources.Add(resCfg + ",config.txt");
 
-                        CompilerResults cr = provider.CompileAssemblyFromFile(cp, srcInstaller, srcShared, srcAssembly);
+                        CompilerResults cr = provider.CompileAssemblyFromFile(cp,
+                            Path.Combine(srcDir, "Installer.cs"),
+                            Path.Combine(srcDir, "Shared.cs"),
+                            Path.Combine(srcDir, "AssemblyInfo.cs"));
                         if (cr.Errors.HasErrors)
                         {
                             StringBuilder sbErr = new StringBuilder();
@@ -820,7 +800,12 @@ namespace Vic3Admin
                         o.Write(BitConverter.GetBytes(0x56494333494E5354L), 0, 8);
                     }
                 }
-                finally { try { Directory.Delete(tmp, true); } catch { } }
+                finally
+                {
+                    try { if (File.Exists(stub)) File.Delete(stub); } catch { }
+                    try { if (File.Exists(resCfg)) File.Delete(resCfg); } catch { }
+                    try { if (File.Exists(resBg)) File.Delete(resBg); } catch { }
+                }
 
                 SetStatus("Готово: " + outPath + " (" + Sz(new FileInfo(outPath).Length) + ")", 1000);
                 return null;

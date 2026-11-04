@@ -15,4 +15,5 @@ admin.ini
 
 # Executables (packaged in VicAdmin.zip)
 VicAdmin.exe
+Vic3Shared.dll
 
