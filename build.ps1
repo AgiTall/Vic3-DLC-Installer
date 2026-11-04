@@ -1,34 +1,65 @@
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-$csc = Join-Path ([System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory()) 'csc.exe'
+$fwDir = [System.Runtime.InteropServices.RuntimeEnvironment]::GetRuntimeDirectory()
 $src = Join-Path $root 'src'
 $res = Join-Path $root 'res_cache'
 
 if (!(Test-Path $res)) { New-Item -ItemType Directory -Path $res | Out-Null }
 
-function Obfuscate-File($inputPath, $outputPath) {
+function Compress-Resource($inputPath, $outputPath) {
     $bytes = [System.IO.File]::ReadAllBytes($inputPath)
-    for ($i = 0; $i -lt $bytes.Length; $i++) {
-        $bytes[$i] = $bytes[$i] -bxor 0x5A
+    $fs = [System.IO.File]::Create($outputPath)
+    try {
+        $ds = New-Object System.IO.Compression.DeflateStream($fs, [System.IO.Compression.CompressionLevel]::Optimal)
+        try {
+            $ds.Write($bytes, 0, $bytes.Length)
+        } finally {
+            $ds.Dispose()
+        }
+    } finally {
+        $fs.Dispose()
     }
-    [System.IO.File]::WriteAllBytes($outputPath, $bytes)
 }
 
-Obfuscate-File (Join-Path $src "Installer.cs") (Join-Path $res "Installer.cs.dat")
-Obfuscate-File (Join-Path $src "Shared.cs") (Join-Path $res "Shared.cs.dat")
-Obfuscate-File (Join-Path $src "app.manifest") (Join-Path $res "app.manifest.dat")
-Obfuscate-File (Join-Path $src "AssemblyInfo.cs") (Join-Path $res "AssemblyInfo.cs.dat")
+Compress-Resource (Join-Path $src "Installer.cs") (Join-Path $res "Installer.cs.dat")
+Compress-Resource (Join-Path $src "Shared.cs") (Join-Path $res "Shared.cs.dat")
+Compress-Resource (Join-Path $src "app.manifest") (Join-Path $res "app.manifest.dat")
+Compress-Resource (Join-Path $src "AssemblyInfo.cs") (Join-Path $res "AssemblyInfo.cs.dat")
 
-& $csc /nologo /target:winexe /optimize+ /codepage:65001 /platform:anycpu /out:"$root\VicAdmin.exe" `
-  /win32manifest:"$src\app.manifest" /win32icon:"$root\assets\icon.ico" `
-  /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll `
-  /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll `
-  "/resource:$res\Installer.cs.dat,Installer.cs.dat" `
-  "/resource:$res\Shared.cs.dat,Shared.cs.dat" `
-  "/resource:$res\app.manifest.dat,app.manifest.dat" `
-  "/resource:$res\AssemblyInfo.cs.dat,AssemblyInfo.cs.dat" `
-  "/resource:$root\assets\icon.ico,icon.ico" `
-  "$src\Admin.cs" "$src\Shared.cs" "$src\AssemblyInfo.cs"
+$roslyn = Get-ChildItem "C:\Program Files\dotnet\sdk" -Recurse -Filter "csc.dll" -ErrorAction SilentlyContinue | Select-Object -Last 1
+
+$commonArgs = @(
+    "/nologo",
+    "/target:winexe",
+    "/optimize+",
+    "/platform:anycpu",
+    "/out:$root\VicAdmin.exe",
+    "/win32manifest:$src\app.manifest",
+    "/win32icon:$root\assets\icon.ico",
+    "/r:$fwDir\mscorlib.dll",
+    "/r:$fwDir\System.dll",
+    "/r:$fwDir\System.Core.dll",
+    "/r:$fwDir\System.Drawing.dll",
+    "/r:$fwDir\System.Windows.Forms.dll",
+    "/r:$fwDir\System.IO.Compression.dll",
+    "/r:$fwDir\System.IO.Compression.FileSystem.dll",
+    "/r:$fwDir\Microsoft.CSharp.dll",
+    "/resource:$res\Installer.cs.dat,Installer.cs.dat",
+    "/resource:$res\Shared.cs.dat,Shared.cs.dat",
+    "/resource:$res\app.manifest.dat,app.manifest.dat",
+    "/resource:$res\AssemblyInfo.cs.dat,AssemblyInfo.cs.dat",
+    "/resource:$root\assets\icon.ico,icon.ico",
+    "$src\Admin.cs",
+    "$src\Shared.cs",
+    "$src\AssemblyInfo.cs"
+)
+
+if ($roslyn) {
+    & dotnet $roslyn.FullName /nostdlib+ /deterministic+ /highentropyva+ @commonArgs
+} else {
+    $csc = Join-Path $fwDir 'csc.exe'
+    & $csc /codepage:65001 @commonArgs
+}
 
 if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
 Write-Host 'OK: VicAdmin.exe'

@@ -2,7 +2,6 @@ using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
-using System.Runtime.InteropServices;
 
 // Общий код оформления: используется и установщиком, и предпросмотром в админке.
 public static class Look
@@ -74,56 +73,38 @@ public static class Look
         sharpOut = bg;
         Bitmap mixed = new Bitmap(bg);
         bg = mixed;
-        Rectangle r = new Rectangle(0, 0, W, H);
-        BitmapData da = bg.LockBits(r, ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
-        BitmapData db = blur.LockBits(r, ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
-        int stride = da.Stride;
-        byte[] A = new byte[stride * H];
-        byte[] B = new byte[stride * H];
-        Marshal.Copy(da.Scan0, A, 0, A.Length);
-        Marshal.Copy(db.Scan0, B, 0, B.Length);
 
-        float[] tint = new float[] { tintColor.B, tintColor.G, tintColor.R };
         int panelX = (int)Math.Round(W * Math.Max(15f, Math.Min(100f, panelPct)) / 100f);
         int shadowW = 24;
-        float tintMix = IsDark(tintColor) ? 0.84f : 0.78f;
-        float blurMix = 1f - tintMix;
+        int tintAlpha = IsDark(tintColor) ? 214 : 199;
 
-        for (int y = 0; y < H; y++)
+        using (Graphics g = Graphics.FromImage(bg))
         {
-            for (int x = 0; x < W; x++)
+            if (panelX > 0)
             {
-                int i = y * stride + x * 4;
-                if (x < panelX)
+                Rectangle panelRect = new Rectangle(0, 0, panelX, H);
+                g.DrawImage(blur, panelRect, panelRect, GraphicsUnit.Pixel);
+                using (SolidBrush tintBrush = new SolidBrush(Color.FromArgb(tintAlpha, tintColor.R, tintColor.G, tintColor.B)))
+                    g.FillRectangle(tintBrush, panelRect);
+
+                if (panelX >= 40)
                 {
-                    // Лёгкое внутреннее оттенение к правому краю сайдбара
-                    float edge = Math.Max(0f, 1f - (panelX - x) / 40f) * 0.06f;
-                    for (int k = 0; k < 3; k++)
-                    {
-                        float bl = (B[i + k] * blurMix + tint[k] * tintMix) * (1f - edge);
-                        A[i + k] = (byte)Math.Max(0f, Math.Min(255f, bl));
-                    }
-                }
-                else if (x < panelX + shadowW && panelX < W)
-                {
-                    // Мягкая падающая тень справа от чёткой границы сайдбара
-                    float st = 1f - (x - panelX) / (float)shadowW;
-                    float dark = 1f - 0.45f * st * st;
-                    for (int k = 0; k < 3; k++)
-                        A[i + k] = (byte)(A[i + k] * dark);
+                    Rectangle edgeRect = new Rectangle(panelX - 40, 0, 40, H);
+                    using (LinearGradientBrush edgeBrush = new LinearGradientBrush(edgeRect, Color.FromArgb(0, 0, 0, 0), Color.FromArgb(16, 0, 0, 0), LinearGradientMode.Horizontal))
+                        g.FillRectangle(edgeBrush, edgeRect);
                 }
             }
-        }
-        Marshal.Copy(A, 0, da.Scan0, A.Length);
-        bg.UnlockBits(da);
-        blur.UnlockBits(db);
-        blur.Dispose();
 
-        // Викторианский латунный разделитель на границе сайдбара и тонкая внутренняя рамка
-        if (panelX < W)
-        {
-            using (Graphics g = Graphics.FromImage(bg))
+            if (panelX < W)
             {
+                int sw = Math.Min(shadowW, W - panelX);
+                if (sw > 1)
+                {
+                    Rectangle shadowRect = new Rectangle(panelX, 0, sw, H);
+                    using (LinearGradientBrush shadowBrush = new LinearGradientBrush(shadowRect, Color.FromArgb(115, 0, 0, 0), Color.FromArgb(0, 0, 0, 0), LinearGradientMode.Horizontal))
+                        g.FillRectangle(shadowBrush, shadowRect);
+                }
+
                 Color brass = IsDark(tintColor) ? Color.FromArgb(185, 178, 142, 86) : Color.FromArgb(165, 140, 105, 60);
                 Color inner = IsDark(tintColor) ? Color.FromArgb(40, 255, 240, 200) : Color.FromArgb(90, 255, 255, 255);
                 using (Pen pBrass = new Pen(brass, 1f))
@@ -134,6 +115,8 @@ public static class Look
                 }
             }
         }
+
+        blur.Dispose();
         return bg;
     }
 }

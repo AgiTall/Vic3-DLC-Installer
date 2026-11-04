@@ -8,7 +8,6 @@ using System.Drawing.Text;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
-using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Windows.Forms;
@@ -384,8 +383,8 @@ namespace Vic3Installer
 
     class MainForm : Form
     {
-        [DllImport("user32.dll")] static extern bool ReleaseCapture();
-        [DllImport("user32.dll")] static extern IntPtr SendMessage(IntPtr h, int m, int w, int l);
+        Point dragStart;
+        bool dragging;
 
         Cfg cfg;
         Color accent, titleColor, blurColor;
@@ -477,8 +476,8 @@ namespace Vic3Installer
             min.SetBounds(Look.W - 64, 10, 26, 24);
             min.Click += delegate { WindowState = FormWindowState.Minimized; };
 
-            MouseDown += Drag;
-            foreach (Control c in new Control[] { lblTitle, lblSub, lblInfo, lblPathCap, lblStatus, lblFooter }) c.MouseDown += Drag;
+            BindDrag(this);
+            foreach (Control c in new Control[] { lblTitle, lblSub, lblInfo, lblPathCap, lblStatus, lblFooter }) BindDrag(c);
 
             anim = new System.Windows.Forms.Timer();
             anim.Interval = 15;
@@ -569,11 +568,20 @@ namespace Vic3Installer
             lblTitle.Font = new Font("Georgia", 11f, FontStyle.Bold);
         }
 
-        void Drag(object s, MouseEventArgs e)
+        void BindDrag(Control c)
         {
-            if (e.Button != MouseButtons.Left) return;
-            ReleaseCapture();
-            SendMessage(Handle, 0xA1, 2, 0);
+            c.MouseDown += delegate(object s, MouseEventArgs e)
+            {
+                if (e.Button == MouseButtons.Left) { dragging = true; dragStart = Cursor.Position; }
+            };
+            c.MouseMove += delegate(object s, MouseEventArgs e)
+            {
+                if (!dragging) return;
+                Point cur = Cursor.Position;
+                Location = new Point(Location.X + cur.X - dragStart.X, Location.Y + cur.Y - dragStart.Y);
+                dragStart = cur;
+            };
+            c.MouseUp += delegate { dragging = false; };
         }
 
         protected override void OnPaintBackground(PaintEventArgs e)

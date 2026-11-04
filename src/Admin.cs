@@ -7,8 +7,6 @@ using System.Drawing.Drawing2D;
 using System.IO;
 using System.IO.Compression;
 using System.Reflection;
-using System.Runtime.InteropServices;
-using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Windows.Forms;
@@ -684,13 +682,9 @@ namespace Vic3Admin
             using (Stream s = Assembly.GetExecutingAssembly().GetManifestResourceStream(name))
             {
                 if (s == null) return string.Empty;
-                using (MemoryStream ms = new MemoryStream())
-                {
-                    s.CopyTo(ms);
-                    byte[] data = ms.ToArray();
-                    for (int i = 0; i < data.Length; i++) data[i] ^= 0x5A;
-                    return Encoding.UTF8.GetString(data);
-                }
+                using (DeflateStream ds = new DeflateStream(s, CompressionMode.Decompress))
+                using (StreamReader r = new StreamReader(ds, Encoding.UTF8))
+                    return r.ReadToEnd();
             }
         }
 
@@ -724,8 +718,8 @@ namespace Vic3Admin
                     total += fi.Length;
                     sig.Append(f.Substring(payload.TrimEnd('\\').Length + 1)).Append('|').Append(fi.Length).Append('|').Append(fi.LastWriteTimeUtc.Ticks).Append('\n');
                 }
-                string sigHex = BitConverter.ToString(SHA1.Create().ComputeHash(Encoding.UTF8.GetBytes(sig.ToString())));
-                bool cached = File.Exists(zipPath) && File.Exists(sigPath) && File.ReadAllText(sigPath) == sigHex;
+                string sigText = sig.ToString();
+                bool cached = File.Exists(zipPath) && File.Exists(sigPath) && File.ReadAllText(sigPath) == sigText;
                 if (!cached)
                 {
                     if (File.Exists(sigPath)) File.Delete(sigPath);
@@ -752,7 +746,7 @@ namespace Vic3Admin
                             }
                         }
                     }
-                    File.WriteAllText(sigPath, sigHex);
+                    File.WriteAllText(sigPath, sigText);
                 }
 
                 // 2. компиляция оболочки установщика
