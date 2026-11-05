@@ -61,7 +61,7 @@ namespace Vic3Installer
 
     class Cfg
     {
-        public string Title = "Victoria 3", Subtitle = "", Info = "", Footer = "", Accent = "#8E242C", TitleColor = "#E6D2B5", BlurColor = "#1B1E24"; public float Panel = 46f; public bool Divider = true; public int FadeWidth = 75; public int TitleW = 264, TextW = 264;
+        public string Title = "Victoria 3", Subtitle = "", Info = "", Footer = "", Accent = "#8E242C", TitleColor = "#E6D2B5", BlurColor = "#1B1E24"; public float Panel = 46f; public bool Divider = true; public int FadeWidth = 0; public int TitleW = 264, TextW = 264;
         public static Cfg Load()
         {
             Cfg c = new Cfg();
@@ -556,13 +556,14 @@ namespace Vic3Installer
             bar.Visible = btnStop.Visible = btnCancel.Visible = inst;
             if (!inst)
             {
-                int wTxt = Math.Max(200, cfg.TextW);
-                int wTitle = Math.Max(200, cfg.TitleW);
-                int wCtrl = Math.Min(wTxt, 272);
+                int wTxt = Math.Max(120, Math.Min(Look.W - CX - 16, cfg.TextW));
+                int wTitle = Math.Max(120, Math.Min(Look.W - CX - 16, cfg.TitleW));
+                int wCtrl = Math.Max(150, Math.Min(wTxt, 300));
                 lblTitle.SetBounds(CX, 28, wTitle, 74);
                 FitTitle(wTitle, 74);
                 lblSub.SetBounds(CX, 106, wTxt, 22);
                 lblInfo.SetBounds(CX, 134, wTxt, 136);
+                FitInfo(wTxt, 136);
                 lblPathCap.SetBounds(CX, 274, wCtrl, 18);
                 boxPath.SetBounds(CX, 294, wCtrl - 74, 28);
                 btnBrowse.SetBounds(CX + wCtrl - 68, 294, 68, 28);
@@ -592,16 +593,33 @@ namespace Vic3Installer
             using (Graphics g = CreateGraphics())
             {
                 float size = 20f;
-                while (size > 11f)
+                while (size >= 10f)
                 {
                     Font f = new Font("Georgia", size, FontStyle.Bold);
                     SizeF s = g.MeasureString(lblTitle.Text, f, w);
                     if (s.Height <= h) { lblTitle.Font = f; return; }
                     f.Dispose();
-                    size -= 1f;
+                    size -= 0.5f;
                 }
             }
-            lblTitle.Font = new Font("Georgia", 11f, FontStyle.Bold);
+            lblTitle.Font = new Font("Georgia", 10f, FontStyle.Bold);
+        }
+
+        void FitInfo(int w, int h)
+        {
+            using (Graphics g = CreateGraphics())
+            {
+                float size = 8.75f;
+                while (size >= 6.75f)
+                {
+                    Font f = new Font("Segoe UI", size);
+                    SizeF s = g.MeasureString(lblInfo.Text, f, w);
+                    if (s.Height <= h) { lblInfo.Font = f; return; }
+                    f.Dispose();
+                    size -= 0.25f;
+                }
+            }
+            lblInfo.Font = new Font("Segoe UI", 6.75f);
         }
 
         void BindDrag(Control c)

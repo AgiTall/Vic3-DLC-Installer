@@ -73,32 +73,61 @@ public static class Look
         bg = mixed;
 
         int panelX = (int)Math.Round(W * Math.Max(5f, Math.Min(100f, panelPct)) / 100f);
+        int fadeW = Math.Max(0, Math.Min(300, fadeWidth));
         int tintAlpha = IsDark(tintColor) ? 214 : 199;
 
-        using (Graphics g = Graphics.FromImage(bg))
+        // Готовим слой размытия с тонировкой
+        using (Bitmap panelBmp = new Bitmap(W, H, PixelFormat.Format32bppArgb))
         {
-            if (divider)
+            using (Graphics pg = Graphics.FromImage(panelBmp))
             {
-                // Закрытое размытие: сайдбар с чёткой границей, тенью и золотым/латунным разделителем
-                int shadowW = Math.Max(4, Math.Min(100, fadeWidth > 0 ? fadeWidth : 24));
-                if (panelX > 0)
-                {
-                    Rectangle panelRect = new Rectangle(0, 0, panelX, H);
-                    g.DrawImage(blur, panelRect, panelRect, GraphicsUnit.Pixel);
-                    using (SolidBrush tintBrush = new SolidBrush(Color.FromArgb(tintAlpha, tintColor.R, tintColor.G, tintColor.B)))
-                        g.FillRectangle(tintBrush, panelRect);
+                pg.DrawImageUnscaled(blur, 0, 0);
+                using (SolidBrush tintBrush = new SolidBrush(Color.FromArgb(tintAlpha, tintColor.R, tintColor.G, tintColor.B)))
+                    pg.FillRectangle(tintBrush, 0, 0, W, H);
+            }
 
-                    if (panelX >= 40)
+            using (Graphics g = Graphics.FromImage(bg))
+            {
+                int solidW = Math.Max(0, panelX - fadeW);
+                int endX = divider ? panelX : Math.Min(W, Math.Max(panelX, solidW + fadeW));
+                int actualFade = Math.Max(0, endX - solidW);
+
+                // 1. Сплошная область размытия слева
+                if (solidW > 0)
+                {
+                    Rectangle solidRect = new Rectangle(0, 0, Math.Min(W, solidW), H);
+                    g.DrawImage(panelBmp, solidRect, solidRect, GraphicsUnit.Pixel);
+                }
+
+                // 2. Плавный градиент размытие -> прозрачность (smoothstep)
+                if (actualFade > 0 && solidW < W)
+                {
+                    using (ImageAttributes ia = new ImageAttributes())
+                    {
+                        ColorMatrix cm = new ColorMatrix();
+                        for (int x = 0; x < actualFade && (solidW + x) < W; x++)
+                        {
+                            float t = (x + 0.5f) / actualFade;
+                            float keep = 1f - t * t * (3f - 2f * t);
+                            cm.Matrix33 = keep;
+                            ia.SetColorMatrix(cm);
+                            int px = solidW + x;
+                            g.DrawImage(panelBmp, new Rectangle(px, 0, 1, H), px, 0, 1, H, GraphicsUnit.Pixel, ia);
+                        }
+                    }
+                }
+
+                // 3. Если включено закрытое размытие — рисуем латунный разделитель и падающую тень
+                if (divider && panelX < W)
+                {
+                    if (fadeW == 0 && panelX >= 40)
                     {
                         Rectangle edgeRect = new Rectangle(panelX - 40, 0, 40, H);
                         using (LinearGradientBrush edgeBrush = new LinearGradientBrush(edgeRect, Color.FromArgb(0, 0, 0, 0), Color.FromArgb(16, 0, 0, 0), LinearGradientMode.Horizontal))
                             g.FillRectangle(edgeBrush, edgeRect);
                     }
-                }
 
-                if (panelX < W)
-                {
-                    int sw = Math.Min(shadowW, W - panelX);
+                    int sw = Math.Min(24, W - panelX);
                     if (sw > 1)
                     {
                         Rectangle shadowRect = new Rectangle(panelX, 0, sw, H);
@@ -111,76 +140,9 @@ public static class Look
                     using (Pen pBrass = new Pen(brass, 1f))
                     using (Pen pInner = new Pen(inner, 1f))
                     {
-                        g.DrawLine(pInner, panelX - 2, 0, panelX - 2, H);
+                        if (panelX >= 2) g.DrawLine(pInner, panelX - 2, 0, panelX - 2, H);
                         g.DrawLine(pBrass, panelX - 1, 0, panelX - 1, H);
                     }
-                }
-            }
-            else
-            {
-                // Открытое размытие: мягкий плавный градиент размытие-прозрачность
-                int fadeW = Math.Max(0, fadeWidth);
-                int solidW = fadeW > 0 ? Math.Max(0, panelX - fadeW / 2) : panelX;
-                int endX = Math.Min(W, solidW + fadeW);
-                int actualFade = Math.Max(0, endX - solidW);
-
-                // 1. Сплошная часть слева
-                if (solidW > 0)
-                {
-                    Rectangle solidRect = new Rectangle(0, 0, Math.Min(W, solidW), H);
-                    g.DrawImage(blur, solidRect, solidRect, GraphicsUnit.Pixel);
-                    using (SolidBrush tintBrush = new SolidBrush(Color.FromArgb(tintAlpha, tintColor.R, tintColor.G, tintColor.B)))
-                        g.FillRectangle(tintBrush, solidRect);
-                }
-
-                // 2. Плавный градиент перехода размытия в полную прозрачность
-                if (actualFade > 0 && solidW < W)
-                {
-                    Rectangle fadeRect = new Rectangle(solidW, 0, actualFade, H);
-                    Bitmap fadeBmp = new Bitmap(actualFade, H, PixelFormat.Format32bppArgb);
-                    using (Graphics fg = Graphics.FromImage(fadeBmp))
-                    {
-                        fg.DrawImage(blur, new Rectangle(0, 0, actualFade, H), fadeRect, GraphicsUnit.Pixel);
-                        using (SolidBrush tintBrush = new SolidBrush(Color.FromArgb(tintAlpha, tintColor.R, tintColor.G, tintColor.B)))
-                            fg.FillRectangle(tintBrush, 0, 0, actualFade, H);
-                    }
-
-                    Bitmap maskBmp = new Bitmap(actualFade, H, PixelFormat.Format32bppArgb);
-                    using (Graphics mg = Graphics.FromImage(maskBmp))
-                    {
-                        using (LinearGradientBrush lgb = new LinearGradientBrush(new Rectangle(0, 0, actualFade, H),
-                            Color.FromArgb(255, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), LinearGradientMode.Horizontal))
-                        {
-                            mg.FillRectangle(lgb, 0, 0, actualFade, H);
-                        }
-                    }
-
-                    BitmapData da = fadeBmp.LockBits(new Rectangle(0, 0, actualFade, H), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
-                    BitmapData dm = maskBmp.LockBits(new Rectangle(0, 0, actualFade, H), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
-                    int stride = da.Stride;
-                    int bytes = stride * H;
-                    byte[] raw = new byte[bytes];
-                    byte[] mraw = new byte[bytes];
-                    System.Runtime.InteropServices.Marshal.Copy(da.Scan0, raw, 0, bytes);
-                    System.Runtime.InteropServices.Marshal.Copy(dm.Scan0, mraw, 0, bytes);
-
-                    for (int y = 0; y < H; y++)
-                    {
-                        for (int x = 0; x < actualFade; x++)
-                        {
-                            int idx = y * stride + x * 4;
-                            int alpha = mraw[idx];
-                            raw[idx + 3] = (byte)((raw[idx + 3] * alpha) / 255);
-                        }
-                    }
-
-                    System.Runtime.InteropServices.Marshal.Copy(raw, 0, da.Scan0, bytes);
-                    fadeBmp.UnlockBits(da);
-                    maskBmp.UnlockBits(dm);
-                    maskBmp.Dispose();
-
-                    g.DrawImage(fadeBmp, solidW, 0);
-                    fadeBmp.Dispose();
                 }
             }
         }
