@@ -38,17 +38,15 @@ public static class Look
         return d;
     }
 
-    // Фон "cover" + акриловая панель слева с чёткой латунной/золотой границей.
-    public static Bitmap Compose(Image src, float panelPct, Color tintColor)
+    public static Bitmap Compose(Image src, float panelPct, Color tintColor, bool divider)
     {
         Bitmap sharp;
-        Bitmap m = Build(src, out sharp, panelPct, tintColor);
+        Bitmap m = Build(src, out sharp, panelPct, tintColor, divider);
         sharp.Dispose();
         return m;
     }
 
-    // sharp - чистый фон, возвращается вариант с размытой карточкой/сайдбаром слева.
-    public static Bitmap Build(Image src, out Bitmap sharpOut, float panelPct, Color tintColor)
+    public static Bitmap Build(Image src, out Bitmap sharpOut, float panelPct, Color tintColor, bool divider)
     {
         Bitmap bg = new Bitmap(W, H, PixelFormat.Format32bppArgb);
         using (Graphics g = Graphics.FromImage(bg))
@@ -75,43 +73,114 @@ public static class Look
         bg = mixed;
 
         int panelX = (int)Math.Round(W * Math.Max(15f, Math.Min(100f, panelPct)) / 100f);
-        int shadowW = 24;
         int tintAlpha = IsDark(tintColor) ? 214 : 199;
 
         using (Graphics g = Graphics.FromImage(bg))
         {
-            if (panelX > 0)
+            if (divider)
             {
-                Rectangle panelRect = new Rectangle(0, 0, panelX, H);
-                g.DrawImage(blur, panelRect, panelRect, GraphicsUnit.Pixel);
-                using (SolidBrush tintBrush = new SolidBrush(Color.FromArgb(tintAlpha, tintColor.R, tintColor.G, tintColor.B)))
-                    g.FillRectangle(tintBrush, panelRect);
-
-                if (panelX >= 40)
+                // Закрытое размытие: сайдбар с чёткой границей, тенью и золотым/латунным разделителем
+                int shadowW = 24;
+                if (panelX > 0)
                 {
-                    Rectangle edgeRect = new Rectangle(panelX - 40, 0, 40, H);
-                    using (LinearGradientBrush edgeBrush = new LinearGradientBrush(edgeRect, Color.FromArgb(0, 0, 0, 0), Color.FromArgb(16, 0, 0, 0), LinearGradientMode.Horizontal))
-                        g.FillRectangle(edgeBrush, edgeRect);
+                    Rectangle panelRect = new Rectangle(0, 0, panelX, H);
+                    g.DrawImage(blur, panelRect, panelRect, GraphicsUnit.Pixel);
+                    using (SolidBrush tintBrush = new SolidBrush(Color.FromArgb(tintAlpha, tintColor.R, tintColor.G, tintColor.B)))
+                        g.FillRectangle(tintBrush, panelRect);
+
+                    if (panelX >= 40)
+                    {
+                        Rectangle edgeRect = new Rectangle(panelX - 40, 0, 40, H);
+                        using (LinearGradientBrush edgeBrush = new LinearGradientBrush(edgeRect, Color.FromArgb(0, 0, 0, 0), Color.FromArgb(16, 0, 0, 0), LinearGradientMode.Horizontal))
+                            g.FillRectangle(edgeBrush, edgeRect);
+                    }
+                }
+
+                if (panelX < W)
+                {
+                    int sw = Math.Min(shadowW, W - panelX);
+                    if (sw > 1)
+                    {
+                        Rectangle shadowRect = new Rectangle(panelX, 0, sw, H);
+                        using (LinearGradientBrush shadowBrush = new LinearGradientBrush(shadowRect, Color.FromArgb(115, 0, 0, 0), Color.FromArgb(0, 0, 0, 0), LinearGradientMode.Horizontal))
+                            g.FillRectangle(shadowBrush, shadowRect);
+                    }
+
+                    Color brass = IsDark(tintColor) ? Color.FromArgb(185, 178, 142, 86) : Color.FromArgb(165, 140, 105, 60);
+                    Color inner = IsDark(tintColor) ? Color.FromArgb(40, 255, 240, 200) : Color.FromArgb(90, 255, 255, 255);
+                    using (Pen pBrass = new Pen(brass, 1f))
+                    using (Pen pInner = new Pen(inner, 1f))
+                    {
+                        g.DrawLine(pInner, panelX - 2, 0, panelX - 2, H);
+                        g.DrawLine(pBrass, panelX - 1, 0, panelX - 1, H);
+                    }
                 }
             }
-
-            if (panelX < W)
+            else
             {
-                int sw = Math.Min(shadowW, W - panelX);
-                if (sw > 1)
+                // Открытое размытие: мягкий плавный край без полоски и резких теней
+                const int fadeW = 75;
+                int solidW = Math.Max(0, panelX - fadeW / 2);
+                int endX = Math.Min(W, solidW + fadeW);
+                int actualFade = Math.Max(1, endX - solidW);
+
+                // 1. Сплошная часть слева
+                if (solidW > 0)
                 {
-                    Rectangle shadowRect = new Rectangle(panelX, 0, sw, H);
-                    using (LinearGradientBrush shadowBrush = new LinearGradientBrush(shadowRect, Color.FromArgb(115, 0, 0, 0), Color.FromArgb(0, 0, 0, 0), LinearGradientMode.Horizontal))
-                        g.FillRectangle(shadowBrush, shadowRect);
+                    Rectangle solidRect = new Rectangle(0, 0, solidW, H);
+                    g.DrawImage(blur, solidRect, solidRect, GraphicsUnit.Pixel);
+                    using (SolidBrush tintBrush = new SolidBrush(Color.FromArgb(tintAlpha, tintColor.R, tintColor.G, tintColor.B)))
+                        g.FillRectangle(tintBrush, solidRect);
                 }
 
-                Color brass = IsDark(tintColor) ? Color.FromArgb(185, 178, 142, 86) : Color.FromArgb(165, 140, 105, 60);
-                Color inner = IsDark(tintColor) ? Color.FromArgb(40, 255, 240, 200) : Color.FromArgb(90, 255, 255, 255);
-                using (Pen pBrass = new Pen(brass, 1f))
-                using (Pen pInner = new Pen(inner, 1f))
+                // 2. Плавный переход размытия и цвета вправо
+                if (actualFade > 0 && solidW < W)
                 {
-                    g.DrawLine(pInner, panelX - 2, 0, panelX - 2, H);
-                    g.DrawLine(pBrass, panelX - 1, 0, panelX - 1, H);
+                    Rectangle fadeRect = new Rectangle(solidW, 0, actualFade, H);
+                    Bitmap fadeBmp = new Bitmap(actualFade, H, PixelFormat.Format32bppArgb);
+                    using (Graphics fg = Graphics.FromImage(fadeBmp))
+                    {
+                        fg.DrawImage(blur, new Rectangle(0, 0, actualFade, H), fadeRect, GraphicsUnit.Pixel);
+                        using (SolidBrush tintBrush = new SolidBrush(Color.FromArgb(tintAlpha, tintColor.R, tintColor.G, tintColor.B)))
+                            fg.FillRectangle(tintBrush, 0, 0, actualFade, H);
+                    }
+
+                    Bitmap maskBmp = new Bitmap(actualFade, H, PixelFormat.Format32bppArgb);
+                    using (Graphics mg = Graphics.FromImage(maskBmp))
+                    {
+                        using (LinearGradientBrush lgb = new LinearGradientBrush(new Rectangle(0, 0, actualFade, H),
+                            Color.FromArgb(255, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), LinearGradientMode.Horizontal))
+                        {
+                            mg.FillRectangle(lgb, 0, 0, actualFade, H);
+                        }
+                    }
+
+                    BitmapData da = fadeBmp.LockBits(new Rectangle(0, 0, actualFade, H), ImageLockMode.ReadWrite, PixelFormat.Format32bppArgb);
+                    BitmapData dm = maskBmp.LockBits(new Rectangle(0, 0, actualFade, H), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+                    int stride = da.Stride;
+                    int bytes = stride * H;
+                    byte[] raw = new byte[bytes];
+                    byte[] mraw = new byte[bytes];
+                    System.Runtime.InteropServices.Marshal.Copy(da.Scan0, raw, 0, bytes);
+                    System.Runtime.InteropServices.Marshal.Copy(dm.Scan0, mraw, 0, bytes);
+
+                    for (int y = 0; y < H; y++)
+                    {
+                        for (int x = 0; x < actualFade; x++)
+                        {
+                            int idx = y * stride + x * 4;
+                            int alpha = mraw[idx];
+                            raw[idx + 3] = (byte)((raw[idx + 3] * alpha) / 255);
+                        }
+                    }
+
+                    System.Runtime.InteropServices.Marshal.Copy(raw, 0, da.Scan0, bytes);
+                    fadeBmp.UnlockBits(da);
+                    maskBmp.UnlockBits(dm);
+                    maskBmp.Dispose();
+
+                    g.DrawImage(fadeBmp, solidW, 0);
+                    fadeBmp.Dispose();
                 }
             }
         }

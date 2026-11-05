@@ -61,7 +61,7 @@ namespace Vic3Installer
 
     class Cfg
     {
-        public string Title = "Victoria 3", Subtitle = "", Info = "", Footer = "", Accent = "#8E242C", TitleColor = "#E6D2B5", BlurColor = "#1B1E24"; public float Panel = 46f; public int TitleW = 264, TextW = 264;
+        public string Title = "Victoria 3", Subtitle = "", Info = "", Footer = "", Accent = "#8E242C", TitleColor = "#E6D2B5", BlurColor = "#1B1E24"; public float Panel = 46f; public bool Divider = true; public int TitleW = 264, TextW = 264;
         public static Cfg Load()
         {
             Cfg c = new Cfg();
@@ -83,6 +83,7 @@ namespace Vic3Installer
                         else if (k == "accent") c.Accent = v;
                         else if (k == "titlecolor") c.TitleColor = v;
                         else if (k == "blurcolor") c.BlurColor = v;
+                        else if (k == "divider") c.Divider = v != "0";
                         else if (k == "panel") { float f; if (float.TryParse(v, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out f)) c.Panel = f; }
                         else if (k == "titlew") { int n; if (int.TryParse(v, out n) && n > 50) c.TitleW = n; }
                         else if (k == "textw") { int n; if (int.TryParse(v, out n) && n > 50) c.TextW = n; }
@@ -383,6 +384,39 @@ namespace Vic3Installer
 
     class MainForm : Form
     {
+        [System.Runtime.InteropServices.DllImport("dwmapi.dll")]
+        static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int attrValue, int attrSize);
+
+        static void TryRoundCorners(Form f, int radius)
+        {
+            bool dwmApplied = false;
+            try
+            {
+                if (Environment.OSVersion.Version.Major >= 10 && Environment.OSVersion.Version.Build >= 22000)
+                {
+                    int val = 2; // DWMW_ROUND_NORMAL (Windows 11 style)
+                    dwmApplied = (DwmSetWindowAttribute(f.Handle, 33, ref val, sizeof(int)) == 0);
+                }
+            }
+            catch { }
+
+            // Если не Win11 или безрамочное окно без DWM-обрамления, задаем плавное скругление через Region
+            try
+            {
+                using (GraphicsPath p = new GraphicsPath())
+                {
+                    int r = radius * 2;
+                    p.AddArc(0, 0, r, r, 180, 90);
+                    p.AddArc(f.Width - r, 0, r, r, 270, 90);
+                    p.AddArc(f.Width - r, f.Height - r, r, r, 0, 90);
+                    p.AddArc(0, f.Height - r, r, r, 90, 90);
+                    p.CloseFigure();
+                    f.Region = new Region(p);
+                }
+            }
+            catch { }
+        }
+
         Point dragStart;
         bool dragging;
 
@@ -433,7 +467,7 @@ namespace Vic3Installer
                 }
             }
             catch { }
-            blurred = Look.Build(src, out sharp, cfg.Panel, blurColor);
+            blurred = Look.Build(src, out sharp, cfg.Panel, blurColor, cfg.Divider);
 
             Color bodyColor = isDark ? Color.FromArgb(218, 210, 198) : Color.FromArgb(52, 36, 28);
             Color subColor = isDark ? Color.FromArgb(204, 166, 108) : accent;
@@ -490,6 +524,7 @@ namespace Vic3Installer
             };
 
             SetLayout(false);
+            TryRoundCorners(this, 10);
             Shown += delegate { Detect(); };
         }
 
@@ -612,8 +647,12 @@ namespace Vic3Installer
 
         protected override void OnPaint(PaintEventArgs e)
         {
-            using (Pen p = new Pen(Color.FromArgb(160, 148, 120, 78)))
-                e.Graphics.DrawRectangle(p, 0, 0, Width - 1, Height - 1);
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            using (GraphicsPath p = FlatButton.Round(new Rectangle(0, 0, Width - 1, Height - 1), 10))
+            using (Pen pen = new Pen(Color.FromArgb(160, 148, 120, 78), 1.2f))
+            {
+                e.Graphics.DrawPath(pen, p);
+            }
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)

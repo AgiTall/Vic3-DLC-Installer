@@ -41,6 +41,7 @@ namespace Vic3Admin
         Color titleColor = Color.FromArgb(230, 210, 181);
         Button bTitleColor, bBlurColor;
         Color blurColor = Color.FromArgb(27, 30, 36);
+        CheckBox chkDivider;
         TrackBar nPanel, nTitleW, nTextW;
         PictureBox preview;
         Bitmap canvas;
@@ -78,12 +79,12 @@ namespace Vic3Admin
 
             Section("ЦВЕТА И РАЗМЕРЫ", x, y); y += 22;
             TableLayoutPanel tl = new TableLayoutPanel();
-            tl.SetBounds(x, y, w, 6 * 36);
-            tl.ColumnCount = 3; tl.RowCount = 6;
+            tl.SetBounds(x, y, w, 7 * 36);
+            tl.ColumnCount = 3; tl.RowCount = 7;
             tl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
             tl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             tl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 52));
-            for (int i = 0; i < 6; i++) tl.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+            for (int i = 0; i < 7; i++) tl.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
             Controls.Add(tl);
             bAccent = TBtn(tl, 0, "Цвет кнопок (акцент)");
             bTitleColor = TBtn(tl, 1, "Цвет заголовка");
@@ -91,13 +92,19 @@ namespace Vic3Admin
             bAccent.Click += delegate { PickColor(); };
             bTitleColor.Click += delegate { using (ColorDialog d = new ColorDialog()) { d.Color = titleColor; d.FullOpen = true; if (d.ShowDialog(this) == DialogResult.OK) { titleColor = d.Color; bTitleColor.BackColor = titleColor; bTitleColor.ForeColor = Look.IsDark(titleColor) ? Color.White : Color.Black; preview.Invalidate(); } } };
             bBlurColor.Click += delegate { using (ColorDialog d = new ColorDialog()) { d.Color = blurColor; d.FullOpen = true; if (d.ShowDialog(this) == DialogResult.OK) { blurColor = d.Color; bBlurColor.BackColor = blurColor; bBlurColor.ForeColor = Look.IsDark(blurColor) ? Color.White : Color.Black; LoadBg(); } } };
-            nPanel = TSlider(tl, 3, "Ширина размытия, %", 15, 100, 46, "%");
-            nTitleW = TSlider(tl, 4, "Длина заголовка, px", 180, 600, 264, "");
-            nTextW = TSlider(tl, 5, "Длина текста, px", 180, 600, 264, "");
+            chkDivider = TCheck(tl, 3, "Тип размытия", "Закрытое (с золотой полоской)", true);
+            chkDivider.CheckedChanged += delegate
+            {
+                chkDivider.Text = chkDivider.Checked ? "Закрытое (с полоской)" : "Открытое (плавный край)";
+                LoadBg();
+            };
+            nPanel = TSlider(tl, 4, "Ширина размытия, %", 15, 100, 46, "%");
+            nTitleW = TSlider(tl, 5, "Длина заголовка, px", 180, 600, 264, "");
+            nTextW = TSlider(tl, 6, "Длина текста, px", 180, 600, 264, "");
             nPanel.ValueChanged += delegate { LoadBg(); };
             nTitleW.ValueChanged += delegate { preview.Invalidate(); };
             nTextW.ValueChanged += delegate { preview.Invalidate(); };
-            y += 6 * 36 + 8;
+            y += 7 * 36 + 8;
             tBg = Row("Фон (картинка)", x, ref y, w - 90, 0);
             Button bBg = Btn("Обзор…", x + w - 82, y - 27, 82, 26, false);
             bBg.Click += delegate { PickBg(); };
@@ -208,6 +215,25 @@ namespace Vic3Admin
             return t;
         }
 
+        CheckBox TCheck(TableLayoutPanel tl, int row, string cap, string text, bool defVal)
+        {
+            Label l = new Label();
+            l.Text = cap; l.ForeColor = Dim; l.Dock = DockStyle.Fill; l.TextAlign = ContentAlignment.MiddleLeft;
+            tl.Controls.Add(l, 0, row);
+            CheckBox c = new CheckBox();
+            c.Text = text;
+            c.Checked = defVal;
+            c.ForeColor = Fg;
+            c.Cursor = Cursors.Hand;
+            c.Dock = DockStyle.Fill;
+            c.TextAlign = ContentAlignment.MiddleLeft;
+            c.Margin = new Padding(4, 3, 3, 3);
+            tl.Controls.Add(c, 1, row);
+            tl.SetColumnSpan(c, 2);
+            lockables.Add(c);
+            return c;
+        }
+
         Button TBtn(TableLayoutPanel tl, int row, string text)
         {
             Label l = new Label();
@@ -288,6 +314,9 @@ namespace Vic3Admin
             blurColor = Look.ParseColor(Get(d, "blurcolor", "#1B1E24"), blurColor);
             bBlurColor.BackColor = blurColor;
             bBlurColor.ForeColor = Look.IsDark(blurColor) ? Color.White : Color.Black;
+            bool div = Get(d, "divider", "1") != "0";
+            chkDivider.Checked = div;
+            chkDivider.Text = div ? "Закрытое (с полоской)" : "Открытое (плавный край)";
             nPanel.Value = (int)Clamp(Get(d, "panel", "46"), 15, 100, 46);
             nTitleW.Value = (int)Clamp(Get(d, "titlew", "264"), 180, 600, 264);
             nTextW.Value = (int)Clamp(Get(d, "textw", "264"), 180, 600, 264);
@@ -303,6 +332,7 @@ namespace Vic3Admin
         string CfgExtra()
         {
             return "blurcolor=" + ColorTranslator.ToHtml(blurColor) + "\npanel=" + nPanel.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) +
+                   "\ndivider=" + (chkDivider.Checked ? "1" : "0") +
                    "\ntitlew=" + nTitleW.Value + "\ntextw=" + nTextW.Value + "\n";
         }
 
@@ -344,7 +374,7 @@ namespace Vic3Admin
                     using (Image tmp = Image.FromStream(new MemoryStream(data))) img = new Bitmap(tmp);
                 }
                 if (canvas != null) canvas.Dispose();
-                canvas = Look.Compose(img, (float)nPanel.Value, blurColor);
+                canvas = Look.Compose(img, (float)nPanel.Value, blurColor, chkDivider != null && chkDivider.Checked);
                 if (img != null) img.Dispose();
             }
             catch { }
@@ -428,6 +458,13 @@ namespace Vic3Admin
             using (Font f = new Font("Segoe UI", 7.75f * k))
             using (SolidBrush b = new SolidBrush(footColor))
                 g.DrawString(tFooter.Text, f, b, new RectangleF(24 * k, 438 * k, wTxt * k, 32 * k));
+
+            // Скругленная рамка предпросмотра
+            using (GraphicsPath borderPath = Rounded(new RectangleF(0, 0, preview.Width - 1, preview.Height - 1), 10 * k))
+            using (Pen pb = new Pen(Color.FromArgb(160, 148, 120, 78), 1f))
+            {
+                g.DrawPath(pb, borderPath);
+            }
 
             // Монохромные иконки окна (свернуть / закрыть)
             using (Pen pi = new Pen(Color.FromArgb(220, 240, 236, 228), 1.2f))
