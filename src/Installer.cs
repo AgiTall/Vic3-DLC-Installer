@@ -61,7 +61,7 @@ namespace Vic3Installer
 
     class Cfg
     {
-        public string Title = "Victoria 3", Subtitle = "", Info = "", Footer = "", Accent = "#8E242C", TitleColor = "#E6D2B5", BlurColor = "#1B1E24"; public float Panel = 46f; public bool Divider = true; public int TitleW = 264, TextW = 264;
+        public string Title = "Victoria 3", Subtitle = "", Info = "", Footer = "", Accent = "#8E242C", TitleColor = "#E6D2B5", BlurColor = "#1B1E24"; public float Panel = 46f; public bool Divider = true; public int FadeWidth = 75; public int TitleW = 264, TextW = 264;
         public static Cfg Load()
         {
             Cfg c = new Cfg();
@@ -84,6 +84,7 @@ namespace Vic3Installer
                         else if (k == "titlecolor") c.TitleColor = v;
                         else if (k == "blurcolor") c.BlurColor = v;
                         else if (k == "divider") c.Divider = v != "0";
+                        else if (k == "fadewidth") { int fw; if (int.TryParse(v, out fw) && fw >= 0) c.FadeWidth = fw; }
                         else if (k == "panel") { float f; if (float.TryParse(v, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out f)) c.Panel = f; }
                         else if (k == "titlew") { int n; if (int.TryParse(v, out n) && n > 50) c.TitleW = n; }
                         else if (k == "textw") { int n; if (int.TryParse(v, out n) && n > 50) c.TextW = n; }
@@ -467,7 +468,7 @@ namespace Vic3Installer
                 }
             }
             catch { }
-            blurred = Look.Build(src, out sharp, cfg.Panel, blurColor, cfg.Divider);
+            blurred = Look.Build(src, out sharp, cfg.Panel, blurColor, cfg.Divider, cfg.FadeWidth);
 
             Color bodyColor = isDark ? Color.FromArgb(218, 210, 198) : Color.FromArgb(52, 36, 28);
             Color subColor = isDark ? Color.FromArgb(204, 166, 108) : accent;

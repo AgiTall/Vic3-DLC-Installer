@@ -38,15 +38,15 @@ public static class Look
         return d;
     }
 
-    public static Bitmap Compose(Image src, float panelPct, Color tintColor, bool divider)
+    public static Bitmap Compose(Image src, float panelPct, Color tintColor, bool divider, int fadeWidth)
     {
         Bitmap sharp;
-        Bitmap m = Build(src, out sharp, panelPct, tintColor, divider);
+        Bitmap m = Build(src, out sharp, panelPct, tintColor, divider, fadeWidth);
         sharp.Dispose();
         return m;
     }
 
-    public static Bitmap Build(Image src, out Bitmap sharpOut, float panelPct, Color tintColor, bool divider)
+    public static Bitmap Build(Image src, out Bitmap sharpOut, float panelPct, Color tintColor, bool divider, int fadeWidth)
     {
         Bitmap bg = new Bitmap(W, H, PixelFormat.Format32bppArgb);
         using (Graphics g = Graphics.FromImage(bg))
@@ -72,7 +72,7 @@ public static class Look
         Bitmap mixed = new Bitmap(bg);
         bg = mixed;
 
-        int panelX = (int)Math.Round(W * Math.Max(15f, Math.Min(100f, panelPct)) / 100f);
+        int panelX = (int)Math.Round(W * Math.Max(5f, Math.Min(100f, panelPct)) / 100f);
         int tintAlpha = IsDark(tintColor) ? 214 : 199;
 
         using (Graphics g = Graphics.FromImage(bg))
@@ -80,7 +80,7 @@ public static class Look
             if (divider)
             {
                 // Закрытое размытие: сайдбар с чёткой границей, тенью и золотым/латунным разделителем
-                int shadowW = 24;
+                int shadowW = Math.Max(4, Math.Min(100, fadeWidth > 0 ? fadeWidth : 24));
                 if (panelX > 0)
                 {
                     Rectangle panelRect = new Rectangle(0, 0, panelX, H);
@@ -118,22 +118,22 @@ public static class Look
             }
             else
             {
-                // Открытое размытие: мягкий плавный край без полоски и резких теней
-                const int fadeW = 75;
-                int solidW = Math.Max(0, panelX - fadeW / 2);
+                // Открытое размытие: мягкий плавный градиент размытие-прозрачность
+                int fadeW = Math.Max(0, fadeWidth);
+                int solidW = fadeW > 0 ? Math.Max(0, panelX - fadeW / 2) : panelX;
                 int endX = Math.Min(W, solidW + fadeW);
-                int actualFade = Math.Max(1, endX - solidW);
+                int actualFade = Math.Max(0, endX - solidW);
 
                 // 1. Сплошная часть слева
                 if (solidW > 0)
                 {
-                    Rectangle solidRect = new Rectangle(0, 0, solidW, H);
+                    Rectangle solidRect = new Rectangle(0, 0, Math.Min(W, solidW), H);
                     g.DrawImage(blur, solidRect, solidRect, GraphicsUnit.Pixel);
                     using (SolidBrush tintBrush = new SolidBrush(Color.FromArgb(tintAlpha, tintColor.R, tintColor.G, tintColor.B)))
                         g.FillRectangle(tintBrush, solidRect);
                 }
 
-                // 2. Плавный переход размытия и цвета вправо
+                // 2. Плавный градиент перехода размытия в полную прозрачность
                 if (actualFade > 0 && solidW < W)
                 {
                     Rectangle fadeRect = new Rectangle(solidW, 0, actualFade, H);

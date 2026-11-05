@@ -42,7 +42,7 @@ namespace Vic3Admin
         Button bTitleColor, bBlurColor;
         Color blurColor = Color.FromArgb(27, 30, 36);
         CheckBox chkDivider;
-        TrackBar nPanel, nTitleW, nTextW;
+        TrackBar nPanel, nFade, nTitleW, nTextW;
         PictureBox preview;
         Bitmap canvas;
         ListView list;
@@ -79,12 +79,12 @@ namespace Vic3Admin
 
             Section("ЦВЕТА И РАЗМЕРЫ", x, y); y += 22;
             TableLayoutPanel tl = new TableLayoutPanel();
-            tl.SetBounds(x, y, w, 7 * 36);
-            tl.ColumnCount = 3; tl.RowCount = 7;
+            tl.SetBounds(x, y, w, 8 * 36);
+            tl.ColumnCount = 3; tl.RowCount = 8;
             tl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
             tl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             tl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 52));
-            for (int i = 0; i < 7; i++) tl.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
+            for (int i = 0; i < 8; i++) tl.RowStyles.Add(new RowStyle(SizeType.Absolute, 36));
             Controls.Add(tl);
             bAccent = TBtn(tl, 0, "Цвет кнопок (акцент)");
             bTitleColor = TBtn(tl, 1, "Цвет заголовка");
@@ -98,13 +98,15 @@ namespace Vic3Admin
                 chkDivider.Text = chkDivider.Checked ? "Закрытое (с полоской)" : "Открытое (плавный край)";
                 LoadBg();
             };
-            nPanel = TSlider(tl, 4, "Ширина размытия, %", 15, 100, 46, "%");
-            nTitleW = TSlider(tl, 5, "Длина заголовка, px", 180, 600, 264, "");
-            nTextW = TSlider(tl, 6, "Длина текста, px", 180, 600, 264, "");
+            nPanel = TSlider(tl, 4, "Ширина размытия, %", 5, 100, 46, "%");
+            nFade = TSlider(tl, 5, "Ширина градиента, px", 0, 200, 75, "");
+            nTitleW = TSlider(tl, 6, "Длина заголовка, px", 180, 600, 264, "");
+            nTextW = TSlider(tl, 7, "Длина текста, px", 180, 600, 264, "");
             nPanel.ValueChanged += delegate { LoadBg(); };
+            nFade.ValueChanged += delegate { LoadBg(); };
             nTitleW.ValueChanged += delegate { preview.Invalidate(); };
             nTextW.ValueChanged += delegate { preview.Invalidate(); };
-            y += 7 * 36 + 8;
+            y += 8 * 36 + 8;
             tBg = Row("Фон (картинка)", x, ref y, w - 90, 0);
             Button bBg = Btn("Обзор…", x + w - 82, y - 27, 82, 26, false);
             bBg.Click += delegate { PickBg(); };
@@ -317,7 +319,8 @@ namespace Vic3Admin
             bool div = Get(d, "divider", "1") != "0";
             chkDivider.Checked = div;
             chkDivider.Text = div ? "Закрытое (с полоской)" : "Открытое (плавный край)";
-            nPanel.Value = (int)Clamp(Get(d, "panel", "46"), 15, 100, 46);
+            nPanel.Value = (int)Clamp(Get(d, "panel", "46"), 5, 100, 46);
+            nFade.Value = (int)Clamp(Get(d, "fadewidth", "75"), 0, 200, 75);
             nTitleW.Value = (int)Clamp(Get(d, "titlew", "264"), 180, 600, 264);
             nTextW.Value = (int)Clamp(Get(d, "textw", "264"), 180, 600, 264);
         }
@@ -333,6 +336,7 @@ namespace Vic3Admin
         {
             return "blurcolor=" + ColorTranslator.ToHtml(blurColor) + "\npanel=" + nPanel.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) +
                    "\ndivider=" + (chkDivider.Checked ? "1" : "0") +
+                   "\nfadewidth=" + nFade.Value +
                    "\ntitlew=" + nTitleW.Value + "\ntextw=" + nTextW.Value + "\n";
         }
 
@@ -374,7 +378,7 @@ namespace Vic3Admin
                     using (Image tmp = Image.FromStream(new MemoryStream(data))) img = new Bitmap(tmp);
                 }
                 if (canvas != null) canvas.Dispose();
-                canvas = Look.Compose(img, (float)nPanel.Value, blurColor, chkDivider != null && chkDivider.Checked);
+                canvas = Look.Compose(img, (float)nPanel.Value, blurColor, chkDivider != null && chkDivider.Checked, nFade != null ? nFade.Value : 75);
                 if (img != null) img.Dispose();
             }
             catch { }
